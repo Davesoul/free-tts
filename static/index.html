@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>free-tts</title>
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#16181d; --line:#262a31; --txt:#e7e9ee;
+    --muted:#8a8f99; --accent:#5d9dff; --accent2:#c2543d; --ok:#46c267; --bad:#e24;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{cursor:pointer}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 16px 80px}
+  h1{font-size:22px;margin:0 0 4px;letter-spacing:.2px}
+  .sub{color:var(--muted);margin-bottom:20px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .grow{flex:1 1 auto;min-width:160px}
+  label{display:block;font-size:12px;color:var(--muted);margin:6px 0 4px}
+  input[type=text],select,textarea{
+    width:100%;background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;outline:none;transition:border-color .12s}
+  input[type=text]:focus,select:focus,textarea:focus{border-color:var(--accent)}
+  textarea{resize:vertical;min-height:64px}
+  .btn{
+    background:var(--accent);color:#0b1016;border:none;border-radius:8px;
+    padding:8px 12px;font-weight:600;letter-spacing:.2px;transition:filter .12s,background .12s}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
+  .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.danger{background:var(--accent2);color:#fff}
+  .btn[disabled]{opacity:.5;cursor:not-allowed}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:14px}
+  .row.stacked{gap:10px}
+  .status{font-size:13px;color:var(--muted);margin-top:10px;min-height:18px}
+  .status.ok{color:var(--ok)} .status.bad{color:var(--bad)}
+  .audiobar{margin-top:12px}
+  .audiobar audio{width:100%;height:42px;border-radius:8px;background:var(--panel)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .hint{font-size:12px;color:var(--muted)}
+  .hidden{display:none!important}
+  #log{font-size:12px;color:var(--muted);margin-top:10px;max-height:120px;overflow:auto;
+    background:#0b0d10;border:1px solid var(--line);border-radius:8px;padding:6px 8px;white-space:pre-wrap;word-break:break-word}
+  .filelist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  .fileitem{display:flex;gap:8px;align-items:center;justify-content:space-between;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
+  .fileitem a{color:var(--accent);text-decoration:none}
+  .fileitem a:hover{text-decoration:underline}
+  .recording{display:none;align-items:center;gap:8px;color:var(--accent2);font-weight:600;margin-top:8px}
+  .recording.on{display:flex}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent2);animation:pulse 1s infinite}
+  @keyframes pulse{0%{opacity:1}50%{opacity:.2}100%{opacity:1}}
+  .progress{display:none;align-items:center;gap:8px;margin-top:8px}
+  .progress.on{display:flex}
+  .spinner{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);
+    border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>free-tts</h1>
+  <div class="sub">local TTS + voice cloning · save MP3 · play in browser · CLI: python tts.py …</div>
+
+  <div class="row stacked">
+    <div class="grow">
+      <label for="text">Text</label>
+      <textarea id="text" placeholder="Type or paste text here…">Hello world, this is a quick test of free-tts.</textarea>
+    </div>
+  </div>
+
+  <div class="row stacked">
+    <div style="flex:2 1 auto;min-width:200px">
+      <label for="engine">Engine</label>
+      <select id="engine">
+        <option value="auto">auto (kokoro, then clone if ref)</option>
+        <option value="kokoro">kokoro</option>
+        <option value="coqui-clone">coqui-clone (voice cloning)</option>
+        <option value="espeak-ng">espeak-ng</option>
+      </select>
+    </div>
+    <div style="flex:2 1 auto;min-width:160px">
+      <label for="voice">Voice (kokoro)</label>
+      <select id="voice"></select>
+    </div>
+    <div style="flex:1 1 auto;min-width:120px">
+      <label for="lang">Language</label>
+      <select id="lang">
+        <option value="en">en</option>
+        <option value="en-us">en-us</option>
+        <option value="fr">fr</option>
+        <option value="de">de</option>
+        <option value="es">es</option>
+        <option value="it">it</option>
+        <option value="pt">pt</option>
+        <option value="ja">ja</option>
+        <option value="zh">zh</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row stacked">
+      <div>
+        <label id="refLabel">Reference audio (for cloning)</label>
+        <div class="row">
+          <input type="text" id="refPath" placeholder="none — record or upload below" disabled style="flex:2 1 auto" />
+          <button class="btn ghost" id="uploadBtn">Upload</button>
+          <input type="file" id="uploadInput" accept=".wav,.mp3,.mp4,.webm,.ogg,.flac" class="hidden" />
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <button class="btn ghost" id="recordBtn">Record</button>
+    </div>
+    <div class="recording" id="recording">
+      <span class="dot"></span> Recording… speak clearly, then press Stop.
+      <button class="btn danger" id="stopRecBtn" style="margin-left:8px">Stop</button>
+    </div>
+    <div class="progress" id="progress">
+      <span class="spinner"></span><span id="progressText">Generating…</span>
+    </div>
+    <div class="hint" id="recHint">Allow microphone when prompted. The recording is saved locally and used as the voice-cloning reference.</div>
+    <div class="row" style="margin-top:6px;align-items:center;gap:8px">
+      <input type="checkbox" id="cleanRef" style="accent-color:var(--accent)" />
+      <label for="cleanRef" style="font-size:12px;color:var(--muted);margin:0">Clean audio (denoise + normalize + trim silence) — takes a few seconds</label>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:14px">
+    <button class="btn" id="runBtn">Generate</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <div class="audiobar hidden" id="audiobar">
+    <audio id="player" controls></audio>
+    <div class="actions">
+      <a id="downloadLink" class="btn ghost" download>Download MP3</a>
+      <button class="btn ghost" id="playBtn">Play</button>
+      <button class="btn ghost" id="stopBtn">Stop</button>
+      <button class="btn ghost" id="clearBtn">Clear</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <div style="font-size:13px;color:var(--muted)">Recent files</div>
+      <button class="btn ghost" id="refreshFilesBtn" style="margin-left:auto">Refresh</button>
+    </div>
+    <div class="filelist" id="filelist"></div>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  const OUT_DIR='/api/files';
+  const log=document.getElementById('log');
+  function L(m){log.textContent=(log.textContent+'\n'+m).slice(-2500);log.scrollTop=log.scrollHeight;}
+  async function api(path,opts){
+    const r=fetch(path,opts);
+    const j=r.then(res=>res.text());
+    const p=j.then(t=>{try{return JSON.parse(t)}catch(e){return {error:'response not JSON',body:t}}});
+    return p.then(x=>{
+      if(x.error==='response not JSON'){
+        L('Server error (not JSON): '+(x.body||'').slice(0,600));
+        return x;
+      }
+      return x;
+    })
+  }
+
+  const engine=$('#engine'),voice=$('#voice'),lang=$('#lang'),
+    text=$('#text'),status=$('#status'),refPath=$('#refPath'),
+    runBtn=$('#runBtn'),recording=$('#recording'),recHint=$('#recHint'),
+    recordBtn=$('#recordBtn'),stopRecBtn=$('#stopRecBtn'),
+    uploadBtn=$('#uploadBtn'),uploadInput=$('#uploadInput'),
+    progress=$('#progress'),progressText=$('#progressText'),
+    audiobar=$('#audiobar'),player=$('#player'),downloadLink=$('#downloadLink'),
+    playBtn=$('#playBtn'),stopBtn=$('#stopBtn'),clearBtn=$('#clearBtn'),
+    filelist=$('#filelist'),refreshFilesBtn=$('#refreshFilesBtn');
+
+  let mediaRecorder=null, recordedChunks=[], recordedBlob=null;
+
+  // voice dropdown
+  let voices=[];
+  voice.innerHTML='<option value="af_sarah">loading voices…</option>';
+  (async ()=>{
+    try{
+      const j=await api('/api/voices');
+      if(j.voices&&j.voices.length){voices=j.voices;
+        voice.innerHTML=voices.map(v=>`<option value="${v}">${v}</option>`).join('')}
+      else{voice.innerHTML='<option value="af_sarah">af_sarah (default)</option>'}
+    }catch(e){L('voice probe failed: '+e); voice.innerHTML='<option value="af_sarah">af_sarah</option>'}
+  })();
+
+  function setStatus(m,ok){status.textContent=m;status.className='status'+(ok?' ok':(m?' bad':''))}
+  function setRunning(on){
+    runBtn.disabled=on;recordBtn.disabled=on;uploadBtn.disabled=on;
+    engine.disabled=on;lang.disabled=on;text.disabled=on}
+  function setProgress(on,txt){
+    progress.classList.toggle('on',on); progressText.textContent=txt||''}
+
+  // ---- reference recording ----
+  recordBtn.addEventListener('click',async ()=>{
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+      setStatus('Microphone API not available in this browser.','');return}
+    try{
+      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')? 'audio/webm;codecs=opus':
+                 MediaRecorder.isTypeSupported('audio/webm')? 'audio/webm':
+                 MediaRecorder.isTypeSupported('audio/ogg')? 'audio/ogg':'audio/mp3';
+      mediaRecorder=new MediaRecorder(stream, mime&&{mimeType:mime});
+      recordedChunks=[]; recordedBlob=null;
+      mediaRecorder.ondataavailable=e=>{if(e.data.size>0)recordedChunks.push(e.data)};
+      mediaRecorder.onstop=()=>{
+        recordedBlob=new Blob(recordedChunks,{type:mime||'audio/webm'});
+        recording.classList.remove('on');stream.getTracks().forEach(t=>t.stop());
+        L('Recording saved locally. Uploading to server…')
+        const reader=new FileReader();
+        reader.onload=()=>api('/api/record',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({audio_b64:reader.result.split(',',2)[1]||reader.result, clean: $('#cleanRef').checked})}).then(j=>{
+            if(j.path){const name=(j.path.split('\\').pop()||j.path).split('/').pop()||j.path;refPath.value=name;
+              L('Reference saved: '+name);setStatus('Reference ready. Generate to use it.','ok')}
+            else L('Reference save failed: '+(j.error||'?'))
+          }).catch(e=>L('Reference upload error: '+e));
+        reader.readAsDataURL(recordedBlob);
+      };
+      mediaRecorder.start();
+      recording.classList.add('on');recHint.textContent='Recording… speak now, then press Stop.';
+      L('Recording started (format: '+mime+'). Press Stop when done.')
+    }catch(e){
+      L('Record error: '+e);setStatus('Microphone error.','');recording.classList.remove('on')}
+  });
+  stopRecBtn.addEventListener('click',()=>{
+    if(mediaRecorder&&mediaRecorder.state!=='inactive'){
+      mediaRecorder.stop();
+      recHint.textContent='Saving…';
+      setTimeout(()=>{if(!recordedBlob){L('No recorded blob.');recHint.textContent='Recording failed.'}},300)
+    }
+  });
+
+  // ---- upload reference ----
+  uploadBtn.addEventListener('click',()=>uploadInput.click());
+  uploadInput.addEventListener('change',async ()=>{
+    const f=uploadInput.files[0]; if(!f)return;
+    const fd=new FormData(); fd.append('file',f);
+    if($('#cleanRef').checked) fd.append('clean','1');
+    try{
+      setProgress(true,'Uploading…');
+      const j=await api('/api/upload',{method:'POST',body:fd});
+      setProgress(false,'');
+      if(j.path){const name=(j.path.split('\\').pop()||j.path).split('/').pop()||j.path;refPath.value=name;
+        L('Reference uploaded: '+name);setStatus('Reference ready: '+name,'ok')}
+      else setStatus('Upload failed.','')
+    }catch(e){setProgress(false,'');setStatus('Upload error.','')}
+    uploadInput.value=''});
+
+  // ---- generate ----
+  runBtn.addEventListener('click',async ()=>{
+    const t=text.value.trim();
+    if(!t){setStatus('Enter some text.','');return}
+    const e=engine.value, v=voice.value, l=lang.value;
+    const ref=refPath.value? (OUT_DIR+'/'+refPath.value) : null;
+    setStatus('Generating…','');setRunning(true);setProgress(true,'Generating…');
+    audiobar.classList.add('hidden');
+    try{
+      const body={text:t,engine:e,voice:v,lang:l};
+      if(e==='coqui-clone'&&ref)body.ref=ref;
+      setProgress(true,'Generating…');
+      const j=await fetch('/api/generate',{method:'POST',
+        headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const r=await j.json();
+      setProgress(false,'');
+      if(!j.ok){L('Generate error: '+(r.error||'?')+'\n'+(r.stderr||''));setStatus('Error.','')}
+      else{
+        const name=r.file.name;
+        L('Generated: '+name+' ('+r.file.size+' bytes)');
+        setStatus('Done — '+name,'ok');
+        player.src='/api/files/'+encodeURIComponent(name);
+        downloadLink.href='/api/files/'+encodeURIComponent(name);
+        downloadLink.download=name;
+        audiobar.classList.remove('hidden');
+        refreshFileList()
+      }
+    }catch(e){setProgress(false,'');L('Generate exception: '+e);setStatus('Error.','')}
+    setRunning(false)
+  });
+
+  playBtn.addEventListener('click',()=>player.play().catch(e=>L('Play error: '+e)));
+  stopBtn.addEventListener('click',()=>{player.pause();player.currentTime=0});
+  clearBtn.addEventListener('click',()=>{player.pause();player.src='';audiobar.classList.add('hidden');setStatus('')});
+
+  async function refreshFileList(){
+    try{
+      const res=await fetch('/api/files');const j=await res.json();
+      filelist.innerHTML='';
+      if(!j.files||!j.files.length){filelist.innerHTML='<div class="hint">No files yet.</div>';return}
+      j.files.slice(0,60).forEach(f=>{
+        const div=document.createElement('div');div.className='fileitem';
+        const a=document.createElement('a');a.href='/api/files/'+encodeURIComponent(f.name);
+        a.textContent=f.name+' ('+f.size+' b)';
+        const del=document.createElement('button');del.className='btn ghost';
+        del.textContent='Del';del.style.padding='2px 8px';del.style.fontSize='12px';
+        del.onclick=async ()=>{
+          try{await fetch('/api/files/'+encodeURIComponent(f.name),{method:'DELETE'});
+            L('Deleted: '+f.name);await refreshFileList()}catch(e){L('Del error: '+e)}
+        };
+        div.appendChild(a);div.appendChild(del);filelist.appendChild(div)
+      })
+    }catch(e){L('file list error: '+e)}
+  }
+  refreshFilesBtn.addEventListener('click',refreshFileList);
+  refreshFileList();
+
+  L('ready. Type text, pick engine/voice, optionally record/upload a reference, then Generate.')
+})();
+</script>
+</body>
+</html>
