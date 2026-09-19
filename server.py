@@ -579,9 +579,9 @@ def _build_static():
 <title>free-tts</title>
 <style>
   :root{
-    --bg:#2a2a28; --panel:#333333; --line:#555; --txt:#f0f0f0;
+    --bg:#1a1a18; --panel:#2a2a28; --line:#444; --txt:#f0f0f0;
     --muted:#aaa; --accent:#c8553d; --accent2:#ff6b35; --accent3:#8b5a2b; --ok:#4ade80; --bad:#f87171; --fg:var(--txt);
-    --border:#c8553d; --hover:#333333; --shadow:rgba(0,0,0,.5);
+    --border:#c8553d; --hover:#2a2a28; --shadow:rgba(0,0,0,.5);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
@@ -888,8 +888,9 @@ def _build_static():
         downloadLink.download=name;
         audiobar.classList.remove('hidden');
         // Caption SRT download link
+        let srtName;
         if(r.captions&&r.captions.path){
-          const srtName=r.captions.name;
+          srtName=r.captions.name;
           const capLink=document.createElement('a');
           capLink.href='/api/files/'+encodeURIComponent(srtName);
           capLink.download=srtName;
