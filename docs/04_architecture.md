@@ -319,6 +319,28 @@ This helper handles non-JSON responses gracefully: if the server returns HTML (e
 
 The `clean` checkbox state is sent as `clean: $('#cleanRef').checked` (a boolean) in the record request body, and as `fd.append('clean', '1')` in the upload FormData.
 
+#### SRT caption generation
+
+After synthesis, the server generates an SRT caption file with word-level timestamps aligned to actual speech:
+
+```
+audio (MP3) → faster-whisper-tiny (word_timestamps=True) →
+  greedy word matching to text segments → SRT
+```
+
+- `_get_whisper()` caches a `WhisperModel('Systran/faster-whisper-tiny', device='cpu', compute_type='int8')` singleton.
+- `_make_srt_aligned()` transcribes the MP3, collects word timestamps, normalizes words (lowercase, strip non-alphanumeric), and greedily matches them to text segments (split by newlines). Segment start = first matched word's start, segment end = last matched word's end. Timestamps are forced to be non-decreasing.
+- Fallback: if alignment fails (any segment unaligned, or faster-whisper not installed), `_make_srt()` (character-count-weighted division) is used.
+- `_fmt_time()` formats seconds to `HH:MM:SS,mmm` SRT format.
+
+#### Light / dark mode
+
+The UI respects the OS-level `prefers-color-scheme` media query:
+
+- **Dark (default)**: navy blue palette (`--bg:#0a1128`, `--panel:#152040`, `--txt:#e8e6df`).
+- **Light**: inverted palette (`--bg:#f0f4ff`, `--panel:#dde3f5`, `--txt:#1a1a2e`).
+- Accent colors (crimson `--accent:#c8553d`, orange `--accent2:#ff6b35`) are consistent across both modes.
+
 ---
 
 ## Data flow

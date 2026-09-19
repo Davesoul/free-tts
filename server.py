@@ -579,9 +579,17 @@ def _build_static():
 <title>free-tts</title>
 <style>
   :root{
-    --bg:#1a1a18; --panel:#2a2a28; --line:#444; --txt:#f0f0f0;
-    --muted:#aaa; --accent:#c8553d; --accent2:#ff6b35; --accent3:#8b5a2b; --ok:#4ade80; --bad:#f87171; --fg:var(--txt);
-    --border:#c8553d; --hover:#2a2a28; --shadow:rgba(0,0,0,.5);
+    --bg:#0a1128; --panel:#152040; --line:#2a3a5a; --txt:#e8e6df;
+    --muted:#8a94a6; --accent:#c8553d; --accent2:#ff6b35; --accent3:#8b5a2b; --ok:#4ade80; --bad:#f87171; --fg:var(--txt);
+    --border:#c8553d; --hover:#1a2a4d; --shadow:rgba(0,0,0,.6);
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#f0f4ff; --panel:#dde3f5; --line:#a0b0d0; --txt:#1a1a2e;
+      --muted:#6a7080; --accent:#c8553d; --accent2:#ff6b35; --accent3:#8b5a2b;
+      --ok:#4ade80; --bad:#f87171; --fg:var(--txt);
+      --border:#c8553d; --hover:#c8d0e8; --shadow:rgba(0,0,0,.1);
+    }
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);

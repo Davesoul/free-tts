@@ -46,3 +46,19 @@ Kokoro ships several voices. Run `python tts.py --list-voices` to see the full s
 - Output is 192 kbps MP3. Change the bitrate in `tts.py` `export(format="mp3", bitrate="192k")`.
 - Reference audio for cloning is normalized to 24kHz mono 16-bit WAV. Optionally clean it first (denoise + normalize + trim silence) via the "Clean audio" checkbox in the UI — this improves cloning quality.
 - The web UI loads Kokoro in-process (pykokoro 0.9.x). The model is loaded once and reused across requests; first synthesis pays the load cost, subsequent ones are fast.
+
+## Captions & Timeline
+
+Each MP3 is generated alongside an SRT caption file with **word-level timestamps** aligned to the actual speech using `faster-whisper` (Whisper-tiny, CPU, int8 quantized). The timeline in the UI syncs to audio playback, highlighting the current caption and auto-scrolling.
+
+- If `faster-whisper` is not installed or alignment fails, the server falls back to character-count-weighted timestamp division.
+- The alignment model (`Systran/faster-whisper-tiny`) is cached on first use.
+- The UI supports **light and dark mode** (navy blue palette), auto-detected via the OS `prefers-color-scheme` media query.
+
+## Requirements
+
+- `python >= 3.10`
+- `pykokoro` (or `espeak-ng` / `pyttsx3` as fallback)
+- `faster-whisper` + `torch` (optional, for word-level caption alignment)
+- `ffmpeg` (for MP3 export and audio normalization)
+- `soundfile`, `numpy`
