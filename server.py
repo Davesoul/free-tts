@@ -99,24 +99,27 @@ def _get_coqui():
 # SRT caption generation
 # ---------------------------------------------------------------------------
 
-def _write_srt(srt_path, text, audio_size):
+def _make_srt(srt_path, text, duration_sec):
     """Write an SRT file from the input text.
-    Splits text by line breaks; estimates timing from audio file size
-    (192 kbps MP3: ~1 byte per 0.004s) and number of segments.
-    Each segment gets equal duration; minimum 2s per caption.
+    Splits text by line breaks; segments weighted by character count
+    for more realistic timing than equal-duration division.
     """
     segments = [s.strip() for s in text.split("\n") if s.strip()]
     if not segments:
         segments = [text.strip()]
     n = len(segments)
-    # Estimate total duration from MP3 size (192kbps ~= 24000 bytes/sec, but
-    # actual bitrate varies; use 20000 bytes/sec as conservative estimate)
-    total_sec = max(audio_size / 20000, n * 2)
-    per_seg = total_sec / n
+    weights = [len(s) for s in segments]
+    total_w = sum(weights)
     with open(srt_path, "w", encoding="utf-8") as f:
+        cum = 0.0
         for i, seg in enumerate(segments, 1):
-            start = (i - 1) * per_seg
-            end = i * per_seg
+            if total_w > 0:
+                seg_dur = duration_sec * (len(seg) / total_w)
+            else:
+                seg_dur = duration_sec / n
+            start = cum
+            end = cum + seg_dur
+            cum = end
             f.write(f"{i}\n")
             f.write(f"{_fmt_time(start)} --> {_fmt_time(end)}\n")
             f.write(f"{seg}\n\n")
@@ -130,6 +133,130 @@ def _fmt_time(sec):
     s = int(sec % 60)
     ms = int((sec - int(sec)) * 1000)
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+# ---------------------------------------------------------------------------
+# Forced alignment SRT (word-level timestamps via faster-whisper)
+# ---------------------------------------------------------------------------
+_whisper_model = None
+_whisper_ready = False
+
+
+def _get_whisper():
+    """Lazy-load and cache the faster-whisper tiny model for forced alignment."""
+    global _whisper_model, _whisper_ready
+    if not _whisper_ready:
+        try:
+            from faster_whisper import WhisperModel
+            _whisper_model = WhisperModel(
+                "Systran/faster-whisper-tiny",
+                device="cpu",
+                compute_type="int8",
+            )
+        except Exception as e:
+            print(f"WHISPER-DBG load failed: {e}", file=sys.stderr)
+            _whisper_model = None
+        _whisper_ready = True
+    return _whisper_model
+
+
+def _make_srt_aligned(srt_path, text, audio_path, lang="en"):
+    """Generate SRT with word-level timestamps via Whisper forced alignment.
+
+    Transcribes the audio with faster-whisper ``word_timestamps=True``,
+    then aligns word timestamps to the original text segments (split by
+    newlines).  Returns True on success, None on failure so the caller
+    can fall back to _make_srt.
+    """
+    model = _get_whisper()
+    if model is None:
+        return None
+
+    import re
+
+    def _norm(s):
+        """Lowercase, strip punctuation for word comparison."""
+        return re.sub(r"[^a-z0-9 ]", "", s.lower()).strip()
+
+    try:
+        wl = lang if lang and lang != "auto" else "en"
+        if wl in ("en-us",):
+            wl = "en"
+
+        segments, _info = model.transcribe(
+            str(audio_path),
+            word_timestamps=True,
+            language=wl,
+        )
+
+        # Collect whisper words: (normalized_word, start, end)
+        wwords = []
+        for seg in segments:
+            for w in seg.words:
+                nw = _norm(w.word)
+                if nw:
+                    wwords.append((nw, w.start, w.end))
+        if not wwords:
+            return None
+
+        # Split original text into segments (by newlines)
+        text_segs = [s.strip() for s in text.split("\n") if s.strip()]
+        if not text_segs:
+            text_segs = [text.strip()]
+
+        # Normalized word list per text segment
+        seg_word_lists = [
+            [w for w in (_norm(x) for x in seg.split()) if w]
+            for seg in text_segs
+        ]
+
+        # Greedy monotonic matching: walk through whisper words in order
+        wi = 0
+        seg_times = []
+        for seg_wlist in seg_word_lists:
+            if not seg_wlist:
+                seg_times.append(None)
+                continue
+            seg_start = seg_end = None
+            for target in seg_wlist:
+                for j in range(wi, len(wwords)):
+                    if wwords[j][0] == target:
+                        if seg_start is None:
+                            seg_start = wwords[j][1]
+                        seg_end = wwords[j][2]
+                        wi = j + 1
+                        break
+            seg_times.append((seg_start, seg_end) if (seg_start is not None) else None)
+
+        # Fall back if any segment couldn't be aligned
+        if any(t is None for t in seg_times):
+            print(
+                f"WHISPER-DBG: {sum(1 for t in seg_times if t is None)}"
+                f"/{len(text_segs)} segments unaligned, falling back",
+                file=sys.stderr,
+            )
+            return None
+
+        # Ensure monotonic, non-overlapping timestamps
+        result = []
+        for i, t in enumerate(seg_times):
+            if result and t[0] < result[-1][1]:
+                t = (result[-1][1], max(t[1], result[-1][1] + 0.05))
+            result.append(t)
+
+        with open(srt_path, "w", encoding="utf-8") as f:
+            for i, seg in enumerate(text_segs):
+                start, end = result[i]
+                f.write(f"{i + 1}\n")
+                f.write(f"{_fmt_time(start)} --> {_fmt_time(end)}\n")
+                f.write(f"{seg}\n\n")
+
+        return True
+    except Exception as e:
+        print(f"WHISPER-DBG alignment error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +306,8 @@ def generate():
     lang = data.get("lang") or "en"
     ref = data.get("ref")  # path to reference wav already on disk
 
+    print(f"GENERATE-DBG: engine={engine}, ref={ref}, _kokoro_imported={_kokoro_imported}", file=sys.stderr)
+
     safe = "".join(c if c.isalnum() or c in "._- " else "_" for c in text)[:60]
     ts = int(time.time() * 1000)
     out_name = f"tts_{ts}.mp3"
@@ -202,7 +331,10 @@ def generate():
             tts = _get_coqui()
             wav_path = out_path.with_suffix(".wav")
             tts.tts_to_file(text=text, speaker_wav=str(ref_path), language=lang, file_path=str(wav_path))
-            wav_path = None
+            # Read exact WAV duration for accurate SRT timing (must read before deleting WAV)
+            import soundfile as _sf
+            wav_info = _sf.info(str(out_path.with_suffix(".wav")))
+            duration = wav_info.duration
             # convert to mp3
             subprocess.run(
                 ["ffmpeg", "-y", "-i", str(out_path.with_suffix(".wav")),
@@ -211,7 +343,17 @@ def generate():
             )
             out_path.with_suffix(".wav").unlink(missing_ok=True)
             info = {"path": str(out_path), "size": out_path.stat().st_size, "name": out_name}
-            return jsonify({"ok": True, "file": info})
+            srt_name = f"tts_{ts}.srt"
+            srt_path = OUT_DIR / srt_name
+            try:
+                if _make_srt_aligned(srt_path, text, str(out_path), lang=lang):
+                    print("CLONE-DBG SRT: word-level aligned", file=sys.stderr)
+                else:
+                    _make_srt(srt_path, text, duration)
+                srt_info = {"path": str(srt_path), "size": srt_path.stat().st_size, "name": srt_name}
+            except Exception:
+                srt_info = None
+            return jsonify({"ok": True, "file": info, "captions": srt_info})
         except Exception as e:
             return jsonify({"error": "clone failed: " + str(e)}), 500
 
@@ -229,7 +371,22 @@ def generate():
             sf.write(str(wav_path), result.audio, result.sample_rate)
             _kokoro_to_mp3(wav_path, out_path)
             info = {"path": str(out_path), "size": out_path.stat().st_size, "name": out_name}
-            return jsonify({"ok": True, "file": info})
+            # Generate SRT captions — try Whisper alignment, fall back to text-weighted
+            srt_name = f"tts_{ts}.srt"
+            srt_path = OUT_DIR / srt_name
+            duration_sec = len(result.audio) / result.sample_rate
+            try:
+                if _make_srt_aligned(srt_path, text, str(out_path), lang=lang):
+                    print("KOKO-DBG SRT: word-level aligned", file=sys.stderr)
+                else:
+                    _make_srt(srt_path, text, duration_sec)
+                    print("KOKO-DBG SRT: text-weighted fallback", file=sys.stderr)
+                srt_info = {"path": str(srt_path), "size": srt_path.stat().st_size, "name": srt_name}
+            except Exception as e:
+                print(f"KOKO-DBG SRT FAIL: {e}", file=sys.stderr)
+                import traceback; traceback.print_exc(file=sys.stderr)
+                srt_info = None
+            return jsonify({"ok": True, "file": info, "captions": srt_info})
         except Exception as e:
             return jsonify({"error": "kokoro failed: " + str(e)}), 500
 
@@ -255,14 +412,26 @@ def generate():
         }), 500
 
     info = {"path": str(out_path), "size": out_path.stat().st_size, "name": out_name}
-    # Generate SRT captions from the input text
+    # Generate SRT captions — use actual MP3 duration from ffprobe
     srt_name = f"tts_{ts}.srt"
     srt_path = OUT_DIR / srt_name
     try:
-        _write_srt(srt_path, text, out_path.stat().st_size)
+        import subprocess as _sp
+        probe = _sp.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(out_path)],
+            capture_output=True, text=True, check=True,
+        )
+        duration = float(probe.stdout.strip())
+        if _make_srt_aligned(srt_path, text, str(out_path), lang=lang):
+            print("CLI-DBG SRT: word-level aligned", file=sys.stderr)
+        else:
+            _make_srt(srt_path, text, duration)
         srt_info = {"path": str(srt_path), "size": srt_path.stat().st_size, "name": srt_name}
     except Exception:
-        srt_info = None
+        # Fall back to MP3-size estimate
+        _make_srt(srt_path, text, out_path.stat().st_size / 20000)
+        srt_info = {"path": str(srt_path), "size": srt_path.stat().st_size, "name": srt_name}
     return jsonify({"ok": True, "file": info, "captions": srt_info})
 
 
@@ -410,17 +579,28 @@ def _build_static():
 <title>free-tts</title>
 <style>
   :root{
-    --bg:#0e0f12; --panel:#16181d; --line:#262a31; --txt:#e7e9ee;
-    --muted:#8a8f99; --accent:#5d9dff; --accent2:#c2543d; --ok:#46c267; --bad:#e24;
+    --bg:#ffff88; --panel:#fff0b3; --line:#888800; --txt:#000000;
+    --muted:#555500; --accent:#0055ff; --accent2:#cc3300; --accent3:#aa6600; --ok:#00aa00; --bad:#ff4444; --fg:var(--txt);
+    --border:#aaaa00; --hover:#ffffcc; --shadow:rgba(0,0,0,.3);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
     font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  body{
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(93,157,255,.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 20%, rgba(194,84,61,.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(160,106,58,.04) 0%, transparent 50%);
+  }
   button,input,select,textarea{font:inherit;color:inherit}
   button{cursor:pointer}
-  .wrap{max-width:920px;margin:0 auto;padding:24px 16px 80px}
-  h1{font-size:22px;margin:0 0 4px;letter-spacing:.2px}
-  .sub{color:var(--muted);margin-bottom:20px}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 16px 80px;
+    border:2px solid var(--border);border-radius:16px;
+    background:linear-gradient(180deg,var(--hover) 0%,var(--bg) 100%);
+    box-shadow:0 4px 24px var(--shadow)}
+  h1{font-size:32px;margin:0 0 8px;letter-spacing:.3px;color:var(--txt);font-weight:bold}
+  .sub{color:var(--muted);margin-bottom:24px;font-size:16px}
   .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .grow{flex:1 1 auto;min-width:160px}
   label{display:block;font-size:12px;color:var(--muted);margin:6px 0 4px}
@@ -462,7 +642,13 @@ def _build_static():
   .spinner{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);
     border-radius:50%;animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-</style>
+  .captions{border:1px solid var(--line);border-radius:8px;background:var(--panel);
+    margin-top:10px;max-height:200px;overflow:auto;font-size:13px}
+  .cap-entry{padding:4px 8px;border-bottom:1px solid var(--line)}
+  .cap-entry:last-child{border-bottom:none}
+  .cap-entry .cap-time{color:var(--muted);font-size:11px;margin-bottom:2px}
+  .cap-entry .cap-text{color:var(--fg)}
+  .cap-entry.active{background:var(--accent3);border-left:3px solid var(--accent);padding-left:5px;margin-left:-8px}
 </head>
 <body>
 <div class="wrap">
@@ -547,6 +733,14 @@ def _build_static():
       <button class="btn ghost" id="playBtn">Play</button>
       <button class="btn ghost" id="stopBtn">Stop</button>
       <button class="btn ghost" id="clearBtn">Clear</button>
+    </div>
+    <div class="captions" id="captions">
+      <div class="captions-header">
+        <span style="font-size:12px;color:var(--muted)">Captions</span>
+      </div>
+      <div class="captions-body" id="captionsBody">
+        <div class="cap-empty">No captions yet</div>
+      </div>
     </div>
   </div>
 
@@ -701,8 +895,21 @@ def _build_static():
           capLink.textContent='Download captions (.srt)';
           capLink.className='btn ghost';
           L('Captions: '+srtName+' ('+r.captions.size+' bytes) — import to CapCut/subtitle apps');
+          const actions=document.querySelector('.actions');
+          if(actions){actions.appendChild(capLink)}
         }
         refreshFileList()
+
+        // Fetch and render caption timeline
+        if(r.captions&&r.captions.path){
+          try{
+            const srtRes=await fetch('/api/files/'+encodeURIComponent(srtName));
+            const srtText=await srtRes.text();
+            const entries=parseSRT(srtText);
+            renderTimeline(entries);
+            L('Timeline: '+entries.length+' caption(s) shown');
+          }catch(e){L('Timeline fetch error: '+e)}
+        }
       }
     }catch(e){setProgress(false,'');L('Generate exception: '+e);setStatus('Error.','')}
     setRunning(false)
@@ -712,6 +919,65 @@ def _build_static():
   stopBtn.addEventListener('click',()=>{player.pause();player.currentTime=0});
   clearBtn.addEventListener('click',()=>{player.pause();player.src='';audiobar.classList.add('hidden');setStatus('')});
 
+  // ---- caption timeline + synced display ----
+  const capBodyEl=document.getElementById('captionsBody');
+  function parseSRT(srtText){
+    const entries=[];const blocks=srtText.trim().split(/\n\s*\n/);
+    for(const block of blocks){
+      const lines=block.split('\n').filter(function(l){return l.length>0});
+      if(lines.length<3)continue;
+      const idx2=parseInt(lines[0],10);
+      if(isNaN(idx2))continue;
+      const m=lines[1].match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+      if(!m)continue;
+      const start=(+m[1])*3600+(+m[2])*60+(+m[3])+(m[4]/1000);
+      const end=(+m[5])*3600+(+m[6])*60+(+m[7])+(m[8]/1000);
+      entries.push({idx:idx2,start:start,end:end,text:lines.slice(2).join('\n')});
+    }
+    return entries;
+  }
+  function fmtDur(s){
+    if(s<0)s=0;s=Math.floor(s*100)/100;
+    const m=Math.floor((s%3600)/60),sec=(s%60).toFixed(2);
+    const p=function(v){return String(v).padStart(2,'0')};
+    return(p(m)+':'+p(sec));
+  }
+  function renderTimeline(entries){
+    capBodyEl.innerHTML='';
+    if(!entries||!entries.length){capBodyEl.innerHTML='<div class="cap-empty">No captions</div>';return}
+    entries.forEach(function(e){
+      const div=document.createElement('div');
+      div.className='cap-entry';
+      div.dataset.start=e.start;div.dataset.end=e.end;
+      const t=document.createElement('div');t.className='cap-time';
+      t.textContent=fmtDur(e.start)+' \u2192 '+fmtDur(e.end);
+      const tx=document.createElement('div');tx.className='cap-text';tx.textContent=e.text;
+      div.appendChild(t);div.appendChild(tx);
+      capBodyEl.appendChild(div);
+    });
+  }
+  function syncActiveCaption(){
+    if(!capBodyEl||!capBodyEl.children.length)return;
+    const first=capBodyEl.children[0];
+    if(first.classList&&first.classList.contains('cap-empty'))return;
+    const ct=player.currentTime||0;
+    let active=null;
+    Array.from(capBodyEl.children).forEach(function(el){
+      const s=+el.dataset.start,e=+el.dataset.end;
+      const on=ct>=s&&ct<e;
+      el.classList.toggle('active',on);
+      if(on)active=el;
+    });
+    if(active&&capBodyEl.scrollHeight>capBodyEl.clientHeight){
+      const sc=active.offsetTop-((capBodyEl.clientHeight||300)/2)+active.clientHeight/2;
+      capBodyEl.scrollTop=Math.max(0,sc);
+    }
+  }
+  player.addEventListener('timeupdate',syncActiveCaption);
+  player.addEventListener('play',syncActiveCaption);
+  player.addEventListener('seeked',syncActiveCaption);
+
+  
   async function refreshFileList(){
     try{
       const res=await fetch('/api/files');const j=await res.json();

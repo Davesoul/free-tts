@@ -5,99 +5,102 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>free-tts</title>
 <style>
-  :root{
-    --bg:#0e0f12; --panel:#16181d; --line:#262a31; --txt:#e7e9ee;
-    --muted:#8a8f99; --accent:#5d9dff; --accent2:#c2543d; --ok:#46c267; --bad:#e24;
-  }
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
-    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  html,body{margin:0;padding:0;background:#ffff88;color:#000000;
+    font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.5}
+  body{background-color:#ffff88}
   button,input,select,textarea{font:inherit;color:inherit}
   button{cursor:pointer}
-  .wrap{max-width:920px;margin:0 auto;padding:24px 16px 80px}
-  h1{font-size:22px;margin:0 0 4px;letter-spacing:.2px}
-  .sub{color:var(--muted);margin-bottom:20px}
-  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .wrap{max-width:920px;margin:0 auto;padding:30px 20px 60px;
+    border:3px solid #000000;border-radius:8px;
+    background:#ffffff;color:#000000}
+  h1{font-size:40px;margin:0 0 12px;letter-spacing:.3px;color:#000000;font-weight:bold}
+  .sub{color:#333333;margin-bottom:28px;font-size:18px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .grow{flex:1 1 auto;min-width:160px}
-  label{display:block;font-size:12px;color:var(--muted);margin:6px 0 4px}
+  label{display:block;font-size:14px;color:#000000;margin:8px 0 4px;font-weight:bold}
   input[type=text],select,textarea{
-    width:100%;background:var(--panel);border:1px solid var(--line);border-radius:8px;
-    padding:8px 10px;outline:none;transition:border-color .12s}
-  input[type=text]:focus,select:focus,textarea:focus{border-color:var(--accent)}
-  textarea{resize:vertical;min-height:64px}
+    width:100%;background:#ffffff;border:2px solid #000000;border-radius:6px;
+    padding:10px 12px;outline:none;color:#000000;font-size:14px}
+  textarea{resize:vertical;min-height:80px}
   .btn{
-    background:var(--accent);color:#0b1016;border:none;border-radius:8px;
-    padding:8px 12px;font-weight:600;letter-spacing:.2px;transition:filter .12s,background .12s}
-  .btn:hover{filter:brightness(1.08)}
-  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
-  .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
-  .btn.danger{background:var(--accent2);color:#fff}
+    background:#0055ff;color:#ffffff;border:none;border-radius:6px;
+    padding:12px 20px;font-weight:600;font-size:16px}
+  .btn:hover{filter:brightness(1.1)}
+  .btn.ghost{background:transparent;border:2px solid #000000;color:#000000}
+  .btn.ghost:hover{border-color:#ff0000;color:#ff0000}
+  .btn.danger{background:#cc0000;color:#ffffff}
   .btn[disabled]{opacity:.5;cursor:not-allowed}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;margin-top:14px}
-  .row.stacked{gap:10px}
-  .status{font-size:13px;color:var(--muted);margin-top:10px;min-height:18px}
-  .status.ok{color:var(--ok)} .status.bad{color:var(--bad)}
-  .audiobar{margin-top:12px}
-  .audiobar audio{width:100%;height:42px;border-radius:8px;background:var(--panel)}
-  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-  .hint{font-size:12px;color:var(--muted)}
+  .panel{background:#ffffff;border:2px solid #000000;border-radius:10px;padding:20px;margin-top:20px}
+  .row.stacked{gap:12px}
+  .status{font-size:14px;color:#000000;margin-top:12px;min-height:20px}
+  .status.ok{color:#008800} .status.bad{color:#cc0000}
+  .audiobar{margin-top:16px}
+  .audiobar audio{width:100%;height:48px;border-radius:6px;background:#cccccc}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+  .hint{font-size:14px;color:#333333}
   .hidden{display:none!important}
-  #log{font-size:12px;color:var(--muted);margin-top:10px;max-height:120px;overflow:auto;
-    background:#0b0d10;border:1px solid var(--line);border-radius:8px;padding:6px 8px;white-space:pre-wrap;word-break:break-word}
-  .filelist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-  .fileitem{display:flex;gap:8px;align-items:center;justify-content:space-between;
-    background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
-  .fileitem a{color:var(--accent);text-decoration:none}
+  #log{font-size:14px;color:#333333;margin-top:12px;max-height:140px;overflow:auto;
+    background:#eeeeee;border:2px solid #000000;border-radius:6px;padding:8px 10px;white-space:pre-wrap;word-break:break-word}
+  .filelist{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .fileitem{display:flex;gap:10px;align-items:center;justify-content:space-between;
+    background:#eeeeee;border:2px solid #000000;border-radius:6px;padding:8px 10px;font-size:14px;color:#000000}
+  .fileitem a{color:#0055ff;text-decoration:none;font-weight:bold}
   .fileitem a:hover{text-decoration:underline}
-  .recording{display:none;align-items:center;gap:8px;color:var(--accent2);font-weight:600;margin-top:8px}
+  .recording{display:none;align-items:center;gap:10px;color:#cc0000;font-weight:600;margin-top:10px;font-size:14px}
   .recording.on{display:flex}
-  .dot{width:10px;height:10px;border-radius:50%;background:var(--accent2);animation:pulse 1s infinite}
-  @keyframes pulse{0%{opacity:1}50%{opacity:.2}100%{opacity:1}}
-  .progress{display:none;align-items:center;gap:8px;margin-top:8px}
+  .dot{width:12px;height:12px;border-radius:50%;background:#cc0000}
+  .progress{display:none;align-items:center;gap:10px;margin-top:10px}
   .progress.on{display:flex}
-  .spinner{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);
-    border-radius:50%;animation:spin .7s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner{width:16px;height:16px;border:2px solid #000000;border-top-color:#0055ff}
+  .captions{border:2px solid #000000;border-radius:8px;background:#ffffff;
+    margin-top:12px;max-height:200px;overflow:auto;font-size:14px;color:#000000}
+  .cap-entry{padding:8px 10px;border-bottom:1px solid #000000}
+  .cap-entry:last-child{border-bottom:none}
+  .cap-entry .cap-time{color:#333333;font-size:13px;margin-bottom:4px}
+  .cap-entry .cap-text{color:#000000}
+  .cap-entry.active{background:#ffddaa;border-left:4px solid #0055ff;padding-left:8px;margin-left:-12px}
+  .cap-empty{color:#666666;font-style:italic;text-align:center;padding:16px;font-size:16px}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>free-tts</h1>
-  <div class="sub">local TTS + voice cloning · save MP3 · play in browser · CLI: python tts.py …</div>
+  <h1 style="color:#000000">free-tts</h1>
+  <div class="sub" style="color:#333333">local TTS + voice cloning · save MP3 · play in browser · CLI: python tts.py …</div>
 
   <div class="row stacked">
     <div class="grow">
-      <label for="text">Text</label>
-      <textarea id="text" placeholder="Type or paste text here…">Hello world, this is a quick test of free-tts.</textarea>
+      <label for="text" style="color:#000000">Text</label>
+      <textarea id="text" placeholder="Type or paste text here…" style="background:#ffffff;color:#000000;border:2px solid #000000">Hello world, this is a quick test of free-tts.</textarea>
     </div>
   </div>
 
   <div class="row stacked">
     <div style="flex:2 1 auto;min-width:200px">
-      <label for="engine">Engine</label>
-      <select id="engine">
-        <option value="auto">auto (kokoro, then clone if ref)</option>
-        <option value="kokoro">kokoro</option>
-        <option value="coqui-clone">coqui-clone (voice cloning)</option>
-        <option value="espeak-ng">espeak-ng</option>
+      <label for="engine" style="color:#000000">Engine</label>
+      <select id="engine" style="background:#ffffff;color:#000000;border:2px solid #000000">
+        <option value="auto" style="background:#ffffff;color:#000000">auto (kokoro, then clone if ref)</option>
+        <option value="kokoro" style="background:#ffffff;color:#000000">kokoro</option>
+        <option value="coqui-clone" style="background:#ffffff;color:#000000">coqui-clone (voice cloning)</option>
+        <option value="espeak-ng" style="background:#ffffff;color:#000000">espeak-ng</option>
       </select>
     </div>
     <div style="flex:2 1 auto;min-width:160px">
-      <label for="voice">Voice (kokoro)</label>
-      <select id="voice"></select>
+      <label for="voice" style="color:#000000">Voice (kokoro)</label>
+      <select id="voice" style="background:#ffffff;color:#000000;border:2px solid #000000"></select>
     </div>
     <div style="flex:1 1 auto;min-width:120px">
-      <label for="lang">Language</label>
-      <select id="lang">
-        <option value="en">en</option>
-        <option value="en-us">en-us</option>
-        <option value="fr">fr</option>
-        <option value="de">de</option>
-        <option value="es">es</option>
-        <option value="it">it</option>
-        <option value="pt">pt</option>
-        <option value="ja">ja</option>
-        <option value="zh">zh</option>
+      <label for="lang" style="color:#000000">Language</label>
+      <select id="lang" style="background:#ffffff;color:#000000;border:2px solid #000000">
+        <option value="en" style="background:#ffffff;color:#000000">en</option>
+        <option value="en-us" style="background:#ffffff;color:#000000">en-us</option>
+        <option value="fr" style="background:#ffffff;color:#000000">fr</option>
+        <option value="de" style="background:#ffffff;color:#000000">de</option>
+        <option value="es" style="background:#ffffff;color:#000000">es</option>
+        <option value="it" style="background:#ffffff;color:#000000">it</option>
+        <option value="pt" style="background:#ffffff;color:#000000">pt</option>
+        <option value="ja" style="background:#ffffff;color:#000000">ja</option>
+        <option value="zh" style="background:#ffffff;color:#000000">zh</option>
       </select>
     </div>
   </div>
@@ -105,51 +108,57 @@
   <div class="panel">
     <div class="row stacked">
       <div>
-        <label id="refLabel">Reference audio (for cloning)</label>
+        <label for="refPath" style="color:#000000">Reference audio (for cloning)</label>
         <div class="row">
-          <input type="text" id="refPath" placeholder="none — record or upload below" disabled style="flex:2 1 auto" />
-          <button class="btn ghost" id="uploadBtn">Upload</button>
+          <input type="text" id="refPath" placeholder="none — record or upload below" disabled style="flex:2 1 auto;background:#ffffff;color:#333333;border:2px solid #000000;font-size:14px" />
+          <button class="btn ghost" id="uploadBtn" style="background:transparent;border:2px solid #000000;color:#000000;padding:12px 20px;font-size:16px">Upload</button>
           <input type="file" id="uploadInput" accept=".wav,.mp3,.mp4,.webm,.ogg,.flac" class="hidden" />
         </div>
       </div>
     </div>
 
-    <div class="row" style="margin-top:8px">
-      <button class="btn ghost" id="recordBtn">Record</button>
+    <div class="row" style="margin-top:12px">
+      <button class="btn ghost" id="recordBtn" style="background:transparent;border:2px solid #000000;color:#000000;padding:12px 20px;font-size:16px">Record</button>
     </div>
     <div class="recording" id="recording">
       <span class="dot"></span> Recording… speak clearly, then press Stop.
-      <button class="btn danger" id="stopRecBtn" style="margin-left:8px">Stop</button>
+      <button class="btn danger" id="stopRecBtn" style="margin-left:12px;background:#cc0000;color:#ffffff;padding:12px 20px;font-size:16px">Stop</button>
     </div>
     <div class="progress" id="progress">
-      <span class="spinner"></span><span id="progressText">Generating…</span>
+      <span class="spinner"></span><span id="progressText" style="color:#000000;font-size:14px">Generating…</span>
     </div>
-    <div class="hint" id="recHint">Allow microphone when prompted. The recording is saved locally and used as the voice-cloning reference.</div>
-    <div class="row" style="margin-top:6px;align-items:center;gap:8px">
-      <input type="checkbox" id="cleanRef" style="accent-color:var(--accent)" />
-      <label for="cleanRef" style="font-size:12px;color:var(--muted);margin:0">Clean audio (denoise + normalize + trim silence) — takes a few seconds</label>
+    <div class="hint" style="color:#333333">Allow microphone when prompted. The recording is saved locally and used as the voice-cloning reference.</div>
+    <div class="row" style="margin-top:10px;align-items:center;gap:12px">
+      <input type="checkbox" id="cleanRef" style="accent-color:#0055ff;width:20px;height:20px" />
+      <label for="cleanRef" style="font-size:14px;color:#000000;margin:0;font-weight:bold">Clean audio (denoise + normalize + trim silence) — takes a few seconds</label>
     </div>
   </div>
 
-  <div class="row" style="margin-top:14px">
-    <button class="btn" id="runBtn">Generate</button>
+  <div class="row" style="margin-top:20px">
+    <button class="btn" id="runBtn" style="background:#0055ff;color:#ffffff;padding:12px 24px;font-size:18px">Generate</button>
     <span class="status" id="status"></span>
   </div>
 
   <div class="audiobar hidden" id="audiobar">
-    <audio id="player" controls></audio>
+    <audio id="player" controls style="display:block;width:100%"></audio>
     <div class="actions">
-      <a id="downloadLink" class="btn ghost" download>Download MP3</a>
-      <button class="btn ghost" id="playBtn">Play</button>
-      <button class="btn ghost" id="stopBtn">Stop</button>
-      <button class="btn ghost" id="clearBtn">Clear</button>
+      <a id="downloadLink" class="btn ghost" download style="background:transparent;border:2px solid #000000;color:#000000;padding:12px 20px;font-size:16px">Download MP3</a>
+      <button class="btn ghost" id="playBtn" style="background:transparent;border:2px solid #000000;color:#000000;padding:12px 20px;font-size:16px">Play</button>
+      <button class="btn ghost" id="stopBtn" style="background:transparent;border:2px solid #000000;color:#000000;padding:12px 20px;font-size:16px">Stop</button>
+      <button class="btn ghost" id="clearBtn" style="background:transparent;border:2px solid #000000;color:#000000;padding:12px 20px;font-size:16px">Clear</button>
+    </div>
+    <div class="captions" id="captions">
+      <div class="captions-header" style="font-size:14px;color:#333333;margin-bottom:10px">Captions</div>
+      <div class="captions-body" id="captionsBody">
+        <div class="cap-empty">No captions yet</div>
+      </div>
     </div>
   </div>
 
   <div class="panel">
     <div class="row">
-      <div style="font-size:13px;color:var(--muted)">Recent files</div>
-      <button class="btn ghost" id="refreshFilesBtn" style="margin-left:auto">Refresh</button>
+      <div style="font-size:14px;color:#333333;margin-right:14px">Recent files</div>
+      <button class="btn ghost" id="refreshFilesBtn" style="margin-left:auto;background:transparent;border:2px solid #000000;color:#000000;padding:12px 20px;font-size:16px">Refresh</button>
     </div>
     <div class="filelist" id="filelist"></div>
   </div>
@@ -159,24 +168,20 @@
 
 <script>
 (function(){
-  const $=s=>document.querySelector(s);
-  const OUT_DIR='/api/files';
-  const log=document.getElementById('log');
-  function L(m){log.textContent=(log.textContent+'\n'+m).slice(-2500);log.scrollTop=log.scrollHeight;}
+  var $=function(s){return document.querySelector(s)};
+  var OUT_DIR='/api/files';
+  var log=document.getElementById('log');
+  function L(m){if(log){log.textContent=(log.textContent+'\n'+m).slice(-2500);log.scrollTop=log.scrollHeight;}}
   async function api(path,opts){
-    const r=fetch(path,opts);
-    const j=r.then(res=>res.text());
-    const p=j.then(t=>{try{return JSON.parse(t)}catch(e){return {error:'response not JSON',body:t}}});
-    return p.then(x=>{
-      if(x.error==='response not JSON'){
-        L('Server error (not JSON): '+(x.body||'').slice(0,600));
-        return x;
-      }
+    var r=fetch(path,opts);
+    var j=r.then(function(res){return res.text()});
+    var p=j.then(function(t){try{return JSON.parse(t)}catch(e){return {error:'response not JSON',body:t}}});
+    return p.then(function(x){
+      if(x.error==='response not JSON'){L('Server error (not JSON): '+(x.body||'').slice(0,600));return x;}
       return x;
     })
   }
-
-  const engine=$('#engine'),voice=$('#voice'),lang=$('#lang'),
+  var engine=$('#engine'),voice=$('#voice'),lang=$('#lang'),
     text=$('#text'),status=$('#status'),refPath=$('#refPath'),
     runBtn=$('#runBtn'),recording=$('#recording'),recHint=$('#recHint'),
     recordBtn=$('#recordBtn'),stopRecBtn=$('#stopRecBtn'),
@@ -185,152 +190,213 @@
     audiobar=$('#audiobar'),player=$('#player'),downloadLink=$('#downloadLink'),
     playBtn=$('#playBtn'),stopBtn=$('#stopBtn'),clearBtn=$('#clearBtn'),
     filelist=$('#filelist'),refreshFilesBtn=$('#refreshFilesBtn');
-
-  let mediaRecorder=null, recordedChunks=[], recordedBlob=null;
-
-  // voice dropdown
-  let voices=[];
+  var voices=[];
   voice.innerHTML='<option value="af_sarah">loading voices…</option>';
-  (async ()=>{
+  (async function(){
     try{
-      const j=await api('/api/voices');
+      var j=await api('/api/voices');
       if(j.voices&&j.voices.length){voices=j.voices;
-        voice.innerHTML=voices.map(v=>`<option value="${v}">${v}</option>`).join('')}
+        voice.innerHTML=voices.map(function(v){return '<option value="'+v+'">'+v+'</option>'}).join('')}
       else{voice.innerHTML='<option value="af_sarah">af_sarah (default)</option>'}
     }catch(e){L('voice probe failed: '+e); voice.innerHTML='<option value="af_sarah">af_sarah</option>'}
   })();
-
-  function setStatus(m,ok){status.textContent=m;status.className='status'+(ok?' ok':(m?' bad':''))}
+  function setStatus(m,ok){if(status){status.textContent=m;status.className='status'+(ok?' ok':(m?' bad':''))}}
   function setRunning(on){
-    runBtn.disabled=on;recordBtn.disabled=on;uploadBtn.disabled=on;
-    engine.disabled=on;lang.disabled=on;text.disabled=on}
+    if(runBtn)runBtn.disabled=on;
+    if(recordBtn)recordBtn.disabled=on;
+    if(uploadBtn)uploadBtn.disabled=on;
+    if(engine)engine.disabled=on;
+    if(lang)lang.disabled=on;
+    if(text)text.disabled=on;
+  }
   function setProgress(on,txt){
-    progress.classList.toggle('on',on); progressText.textContent=txt||''}
-
-  // ---- reference recording ----
-  recordBtn.addEventListener('click',async ()=>{
+    if(progress)progress.classList.toggle('on',on);
+    if(progressText)progressText.textContent=txt||'';
+  }
+  recordBtn.addEventListener('click',async function(){
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
       setStatus('Microphone API not available in this browser.','');return}
     try{
-      const stream=await navigator.mediaDevices.getUserMedia({audio:true});
-      const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')? 'audio/webm;codecs=opus':
+      var stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      var mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')? 'audio/webm;codecs=opus':
                  MediaRecorder.isTypeSupported('audio/webm')? 'audio/webm':
                  MediaRecorder.isTypeSupported('audio/ogg')? 'audio/ogg':'audio/mp3';
       mediaRecorder=new MediaRecorder(stream, mime&&{mimeType:mime});
       recordedChunks=[]; recordedBlob=null;
-      mediaRecorder.ondataavailable=e=>{if(e.data.size>0)recordedChunks.push(e.data)};
-      mediaRecorder.onstop=()=>{
+      mediaRecorder.ondataavailable=function(e){if(e.data.size>0)recordedChunks.push(e.data)};
+      mediaRecorder.onstop=function(){
         recordedBlob=new Blob(recordedChunks,{type:mime||'audio/webm'});
-        recording.classList.remove('on');stream.getTracks().forEach(t=>t.stop());
-        L('Recording saved locally. Uploading to server…')
-        const reader=new FileReader();
-        reader.onload=()=>api('/api/record',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({audio_b64:reader.result.split(',',2)[1]||reader.result, clean: $('#cleanRef').checked})}).then(j=>{
-            if(j.path){const name=(j.path.split('\\').pop()||j.path).split('/').pop()||j.path;refPath.value=name;
-              L('Reference saved: '+name);setStatus('Reference ready. Generate to use it.','ok')}
-            else L('Reference save failed: '+(j.error||'?'))
-          }).catch(e=>L('Reference upload error: '+e));
+        recording.classList.remove('on');stream.getTracks().forEach(function(t){t.stop()});
+        L('Recording saved locally. Uploading to server…');
+        var reader=new FileReader();
+        reader.onload=function(){
+          api('/api/record',{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({audio_b64:reader.result.split(',',2)[1]||reader.result, clean: $('#cleanRef').checked})}).then(function(j){
+              if(j.path){var name=(j.path.split('\\\\').pop()||j.path).split('/').pop()||j.path;if(refPath)refPath.value=name;
+                L('Reference saved: '+name);setStatus('Reference ready. Generate to use it.','ok')}
+              else L('Reference save failed: '+(j.error||'?'));});
+        };
         reader.readAsDataURL(recordedBlob);
       };
       mediaRecorder.start();
-      recording.classList.add('on');recHint.textContent='Recording… speak now, then press Stop.';
-      L('Recording started (format: '+mime+'). Press Stop when done.')
+      recording.classList.add('on');if(recHint)recHint.textContent='Recording… speak now, then press Stop.';
+      L('Recording started (format: '+mime+'). Press Stop when done.');
     }catch(e){
       L('Record error: '+e);setStatus('Microphone error.','');recording.classList.remove('on')}
   });
-  stopRecBtn.addEventListener('click',()=>{
+  stopRecBtn.addEventListener('click',function(){
     if(mediaRecorder&&mediaRecorder.state!=='inactive'){
       mediaRecorder.stop();
-      recHint.textContent='Saving…';
-      setTimeout(()=>{if(!recordedBlob){L('No recorded blob.');recHint.textContent='Recording failed.'}},300)
+      if(recHint)recHint.textContent='Saving…';
+      setTimeout(function(){if(!recordedBlob){L('No recorded blob.');if(recHint)recHint.textContent='Recording failed.'}},300)
     }
   });
-
-  // ---- upload reference ----
-  uploadBtn.addEventListener('click',()=>uploadInput.click());
-  uploadInput.addEventListener('change',async ()=>{
-    const f=uploadInput.files[0]; if(!f)return;
-    const fd=new FormData(); fd.append('file',f);
+  uploadBtn.addEventListener('click',function(){if(uploadInput)uploadInput.click()});
+  if(uploadInput)uploadInput.addEventListener('change',async function(){
+    var f=uploadInput.files[0]; if(!f)return;
+    var fd=new FormData(); fd.append('file',f);
     if($('#cleanRef').checked) fd.append('clean','1');
     try{
       setProgress(true,'Uploading…');
-      const j=await api('/api/upload',{method:'POST',body:fd});
+      var j=await api('/api/upload',{method:'POST',body:fd});
       setProgress(false,'');
-      if(j.path){const name=(j.path.split('\\').pop()||j.path).split('/').pop()||j.path;refPath.value=name;
+      if(j.path){var name=(j.path.split('\\\\').pop()||j.path).split('/').pop()||j.path;if(refPath)refPath.value=name;
         L('Reference uploaded: '+name);setStatus('Reference ready: '+name,'ok')}
       else setStatus('Upload failed.','')
     }catch(e){setProgress(false,'');setStatus('Upload error.','')}
     uploadInput.value=''});
-
-  // ---- generate ----
-  runBtn.addEventListener('click',async ()=>{
-    const t=text.value.trim();
+  runBtn.addEventListener('click',async function(){
+    var t=text.value.trim();
     if(!t){setStatus('Enter some text.','');return}
-    const e=engine.value, v=voice.value, l=lang.value;
-    const ref=refPath.value? (OUT_DIR+'/'+refPath.value) : null;
+    var e=engine.value, v=voice.value, l=lang.value;
+    var ref=refPath.value? (OUT_DIR+'/'+refPath.value) : null;
     setStatus('Generating…','');setRunning(true);setProgress(true,'Generating…');
-    audiobar.classList.add('hidden');
+    if(audiobar)audiobar.classList.add('hidden');
     try{
-      const body={text:t,engine:e,voice:v,lang:l};
+      var body={text:t,engine:e,voice:v,lang:l};
       if(e==='coqui-clone'&&ref)body.ref=ref;
       setProgress(true,'Generating…');
-      const j=await fetch('/api/generate',{method:'POST',
+      var j=await fetch('/api/generate',{method:'POST',
         headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const r=await j.json();
+      var r=await j.json();
       setProgress(false,'');
       if(!j.ok){L('Generate error: '+(r.error||'?')+'\\n'+(r.stderr||''));setStatus('Error.','')}
       else{
-        const name=r.file.name;
+        var name=r.file.name;
         L('Generated: '+name+' ('+r.file.size+' bytes)');
         setStatus('Done — '+name,'ok');
-        player.src='/api/files/'+encodeURIComponent(name);
-        downloadLink.href='/api/files/'+encodeURIComponent(name);
-        downloadLink.download=name;
-        audiobar.classList.remove('hidden');
-        // Caption SRT download link
+        if(player)player.src='/api/files/'+encodeURIComponent(name);
+        if(downloadLink)downloadLink.href='/api/files/'+encodeURIComponent(name);
+        if(downloadLink)downloadLink.download=name;
+        if(audiobar)audiobar.classList.remove('hidden');
         if(r.captions&&r.captions.path){
-          const srtName=r.captions.name;
-          const capLink=document.createElement('a');
+          var srtName=r.captions.name;
+          var capLink=document.createElement('a');
           capLink.href='/api/files/'+encodeURIComponent(srtName);
           capLink.download=srtName;
           capLink.textContent='Download captions (.srt)';
           capLink.className='btn ghost';
           L('Captions: '+srtName+' ('+r.captions.size+' bytes) — import to CapCut/subtitle apps');
+          var actions=document.querySelector('.actions');
+          if(actions){actions.appendChild(capLink)}
         }
-        refreshFileList()
+        refreshFileList();
+        if(r.captions&&r.captions.path){
+          try{
+            var srtRes=await fetch('/api/files/'+encodeURIComponent(srtName));
+            var srtText=await srtRes.text();
+            var entries=parseSRT(srtText);
+            renderTimeline(entries);
+            L('Timeline: '+entries.length+' caption(s) shown');
+          }catch(e){L('Timeline fetch error: '+e)}
+        }
       }
     }catch(e){setProgress(false,'');L('Generate exception: '+e);setStatus('Error.','')}
     setRunning(false)
   });
-
-  playBtn.addEventListener('click',()=>player.play().catch(e=>L('Play error: '+e)));
-  stopBtn.addEventListener('click',()=>{player.pause();player.currentTime=0});
-  clearBtn.addEventListener('click',()=>{player.pause();player.src='';audiobar.classList.add('hidden');setStatus('')});
-
+  if(playBtn)playBtn.addEventListener('click',function(){if(player)player.play().catch(function(e){L('Play error: '+e)})});
+  if(stopBtn)stopBtn.addEventListener('click',function(){if(player){player.pause();player.currentTime=0}});
+  if(clearBtn)clearBtn.addEventListener('click',function(){if(player){player.pause();player.src='';}if(audiobar)audiobar.classList.add('hidden');setStatus('')});
+  var capBodyEl=document.getElementById('captionsBody');
+  function parseSRT(srtText){
+    var entries=[];var blocks=srtText.trim().split(/\n\s*\n/);
+    for(var i=0;i<blocks.length;i++){
+      var block=blocks[i];
+      var lines=block.split('\n').filter(function(l){return l.length>0});
+      if(lines.length<3)continue;
+      var idx2=parseInt(lines[0],10);
+      if(isNaN(idx2))continue;
+      var m=lines[1].match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+      if(!m)continue;
+      var start=(+m[1])*3600+(+m[2])*60+(+m[3])+(m[4]/1000);
+      var end=(+m[5])*3600+(+m[6])*60+(+m[7])+(m[8]/1000);
+      entries.push({idx:idx2,start:start,end:end,text:lines.slice(2).join('\n')});
+    }
+    return entries;
+  }
+  function fmtDur(s){
+    if(s<0)s=0;s=Math.floor(s*100)/100;
+    var m=Math.floor((s%3600)/60),sec=(s%60).toFixed(2);
+    var p=function(v){return String(v).padStart(2,'0')};
+    return(p(m)+':'+p(sec));
+  }
+  function renderTimeline(entries){
+    if(!capBodyEl)return;
+    capBodyEl.innerHTML='';
+    if(!entries||!entries.length){capBodyEl.innerHTML='<div class="cap-empty">No captions</div>';return}
+    for(var i=0;i<entries.length;i++){
+      var e=entries[i];
+      var div=document.createElement('div');div.className='cap-entry';
+      div.dataset.start=e.start;div.dataset.end=e.end;
+      var t=document.createElement('div');t.className='cap-time';
+      t.textContent=fmtDur(e.start)+' → '+fmtDur(e.end);
+      var tx=document.createElement('div');tx.className='cap-text';tx.textContent=e.text;
+      div.appendChild(t);div.appendChild(tx);
+      capBodyEl.appendChild(div);
+    }
+  }
+  function syncActiveCaption(){
+    if(!capBodyEl||!capBodyEl.children.length)return;
+    var first=capBodyEl.children[0];
+    if(first.classList&&first.classList.contains('cap-empty'))return;
+    var ct=player.currentTime||0;
+    var active=null;
+    Array.prototype.forEach.call(capBodyEl.children,function(el){
+      var s=+el.dataset.start,e=+el.dataset.end;
+      var on=ct>=s&&ct<e;
+      el.classList.toggle('active',on);
+      if(on)active=el;
+    });
+    if(active&&capBodyEl.scrollHeight>capBodyEl.clientHeight){
+      var sc=active.offsetTop-((capBodyEl.clientHeight||300)/2)+active.clientHeight/2;
+      capBodyEl.scrollTop=Math.max(0,sc);
+    }
+  }
+  if(player){
+    player.addEventListener('timeupdate',syncActiveCaption);
+    player.addEventListener('play',syncActiveCaption);
+    player.addEventListener('seeked',syncActiveCaption);
+  }
   async function refreshFileList(){
     try{
-      const res=await fetch('/api/files');const j=await res.json();
-      filelist.innerHTML='';
-      if(!j.files||!j.files.length){filelist.innerHTML='<div class="hint">No files yet.</div>';return}
-      j.files.slice(0,60).forEach(f=>{
-        const div=document.createElement('div');div.className='fileitem';
-        const a=document.createElement('a');a.href='/api/files/'+encodeURIComponent(f.name);
+      var res=await fetch('/api/files');var j=await res.json();
+      if(filelist)filelist.innerHTML='';
+      if(!j.files||!j.files.length){if(filelist)filelist.innerHTML='<div class="hint">No files yet.</div>';return}
+      j.files.slice(0,60).forEach(function(f){
+        var div=document.createElement('div');div.className='fileitem';
+        var a=document.createElement('a');a.href='/api/files/'+encodeURIComponent(f.name);
         a.textContent=f.name+' ('+f.size+' b)';
-        const del=document.createElement('button');del.className='btn ghost';
-        del.textContent='Del';del.style.padding='2px 8px';del.style.fontSize='12px';
-        del.onclick=async ()=>{
-          try{await fetch('/api/files/'+encodeURIComponent(f.name),{method:'DELETE'});
-            L('Deleted: '+f.name);await refreshFileList()}catch(e){L('Del error: '+e)}
-        };
-        div.appendChild(a);div.appendChild(del);filelist.appendChild(div)
+        var del=document.createElement('button');del.className='btn ghost';
+        del.textContent='Del';del.style.padding='4px 10px';del.style.fontSize='13px';
+        del.onclick=function(){fetch('/api/files/'+encodeURIComponent(f.name),{method:'DELETE'}).then(function(){
+          L('Deleted: '+f.name);refreshFileList();}).catch(function(e){L('Del error: '+e)});};
+        div.appendChild(a);div.appendChild(del);if(filelist)filelist.appendChild(div)
       })
     }catch(e){L('file list error: '+e)}
   }
-  refreshFilesBtn.addEventListener('click',refreshFileList);
+  if(refreshFilesBtn)refreshFilesBtn.addEventListener('click',refreshFileList);
   refreshFileList();
-
-  L('ready. Type text, pick engine/voice, optionally record/upload a reference, then Generate.')
+  L('ready. Type text, pick engine/voice, optionally record/upload a reference, then Generate.');
 })();
 </script>
 </body>
