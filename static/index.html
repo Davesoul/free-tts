@@ -279,7 +279,7 @@
         headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const r=await j.json();
       setProgress(false,'');
-      if(!j.ok){L('Generate error: '+(r.error||'?')+'\n'+(r.stderr||''));setStatus('Error.','')}
+      if(!j.ok){L('Generate error: '+(r.error||'?')+'\\n'+(r.stderr||''));setStatus('Error.','')}
       else{
         const name=r.file.name;
         L('Generated: '+name+' ('+r.file.size+' bytes)');
@@ -288,6 +288,16 @@
         downloadLink.href='/api/files/'+encodeURIComponent(name);
         downloadLink.download=name;
         audiobar.classList.remove('hidden');
+        // Caption SRT download link
+        if(r.captions&&r.captions.path){
+          const srtName=r.captions.name;
+          const capLink=document.createElement('a');
+          capLink.href='/api/files/'+encodeURIComponent(srtName);
+          capLink.download=srtName;
+          capLink.textContent='Download captions (.srt)';
+          capLink.className='btn ghost';
+          L('Captions: '+srtName+' ('+r.captions.size+' bytes) — import to CapCut/subtitle apps');
+        }
         refreshFileList()
       }
     }catch(e){setProgress(false,'');L('Generate exception: '+e);setStatus('Error.','')}

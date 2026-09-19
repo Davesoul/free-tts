@@ -96,6 +96,43 @@ def _get_coqui():
 
 
 # ---------------------------------------------------------------------------
+# SRT caption generation
+# ---------------------------------------------------------------------------
+
+def _write_srt(srt_path, text, audio_size):
+    """Write an SRT file from the input text.
+    Splits text by line breaks; estimates timing from audio file size
+    (192 kbps MP3: ~1 byte per 0.004s) and number of segments.
+    Each segment gets equal duration; minimum 2s per caption.
+    """
+    segments = [s.strip() for s in text.split("\n") if s.strip()]
+    if not segments:
+        segments = [text.strip()]
+    n = len(segments)
+    # Estimate total duration from MP3 size (192kbps ~= 24000 bytes/sec, but
+    # actual bitrate varies; use 20000 bytes/sec as conservative estimate)
+    total_sec = max(audio_size / 20000, n * 2)
+    per_seg = total_sec / n
+    with open(srt_path, "w", encoding="utf-8") as f:
+        for i, seg in enumerate(segments, 1):
+            start = (i - 1) * per_seg
+            end = i * per_seg
+            f.write(f"{i}\n")
+            f.write(f"{_fmt_time(start)} --> {_fmt_time(end)}\n")
+            f.write(f"{seg}\n\n")
+
+
+def _fmt_time(sec):
+    """Format seconds as SRT timestamp: HH:MM:SS,mmm"""
+    sec = max(sec, 0)
+    h = int(sec // 3600)
+    m = int((sec % 3600) // 60)
+    s = int(sec % 60)
+    ms = int((sec - int(sec)) * 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
+# ---------------------------------------------------------------------------
 # endpoints
 # ---------------------------------------------------------------------------
 @app.route("/health")
@@ -218,10 +255,18 @@ def generate():
         }), 500
 
     info = {"path": str(out_path), "size": out_path.stat().st_size, "name": out_name}
-    return jsonify({"ok": True, "file": info})
+    # Generate SRT captions from the input text
+    srt_name = f"tts_{ts}.srt"
+    srt_path = OUT_DIR / srt_name
+    try:
+        _write_srt(srt_path, text, out_path.stat().st_size)
+        srt_info = {"path": str(srt_path), "size": srt_path.stat().st_size, "name": srt_name}
+    except Exception:
+        srt_info = None
+    return jsonify({"ok": True, "file": info, "captions": srt_info})
 
 
-@app.route("/api/record", methods=["POST"])
+@ app.route("/api/record", methods=["POST"])
 def record():
     data = request.get_json(force=True, silent=True) or {}
     blob_b64 = data.get("audio_b64")
@@ -238,16 +283,23 @@ def record():
         norm_path = OUT_DIR / f"ref_{ts}_norm.wav"
         cmd = ["ffmpeg", "-y", "-i", str(ref_path)]
         if clean:
-            # highpass remove rumble, light FFT denoise, EBU R128 loudness norm,
+            # highpass remove rumble, EBU R128 loudness norm,
             # then trim leading/trailing silence (reversed twice to catch both ends)
+            # afftdn (FFT denoise) is intentionally omitted — it can produce
+            # unstable output that crashes XTTS speaker encoding with
+            # "index out of range in self"
             cmd += [
-                "-af", "highpass=f=80,afftdn=nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11,"
+                "-af", "highpass=f=80,loudnorm=I=-16:TP=-1.5:LRA=11,"
                        "areverse,silenceremove=stop_periods=-1:stop_duration=0.4:"
                        "stop_threshold=-30dB,areverse,"
                        "silenceremove=start_periods=1:start_duration=0.4:start_threshold=-30dB",
             ]
         cmd += ["-ar", "24000", "-ac", "1", "-sample_fmt", "s16", str(norm_path)]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Fall back to uncleaned if cleaned audio is too short for XTTS
+        if norm_path.exists() and norm_path.stat().st_size < 4000:
+            norm_path.unlink(missing_ok=True)
+            raise RuntimeError("cleaned audio too short")
         ref_path.unlink(missing_ok=True)
         return jsonify({"path": norm_path.name, "size": norm_path.stat().st_size})
     except Exception:
@@ -271,15 +323,23 @@ def upload():
         norm_path = OUT_DIR / f"ref_{ts}_norm.wav"
         cmd = ["ffmpeg", "-y", "-i", str(ref_path)]
         if clean:
+            # highpass remove rumble, EBU R128 loudness norm,
+            # then trim leading/trailing silence (reversed twice to catch both ends)
+            # afftdn (FFT denoise) is intentionally omitted — it can produce
+            # unstable output that crashes XTTS speaker encoding with
+            # "index out of range in self"
             cmd += [
-                "-af", "highpass=f=80,afftdn=nf=-25,loudnorm=I=-16:TP=-1.5:LRA=11,"
+                "-af", "highpass=f=80,loudnorm=I=-16:TP=-1.5:LRA=11,"
                        "areverse,silenceremove=stop_periods=-1:stop_duration=0.4:"
                        "stop_threshold=-30dB,areverse,"
                        "silenceremove=start_periods=1:start_duration=0.4:start_threshold=-30dB",
             ]
         cmd += ["-ar", "24000", "-ac", "1", "-sample_fmt", "s16", str(norm_path)]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        ref_path.unlink(missing_ok=True)
+        # Fall back to uncleaned if cleaned audio is too short for XTTS
+        if norm_path.exists() and norm_path.stat().st_size < 4000:
+            norm_path.unlink(missing_ok=True)
+            raise RuntimeError("cleaned audio too short")
         return jsonify({"path": norm_path.name, "size": norm_path.stat().st_size})
     except Exception:
         return jsonify({"path": ref_path.name, "size": ref_path.stat().st_size})
@@ -623,7 +683,7 @@ def _build_static():
         headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const r=await j.json();
       setProgress(false,'');
-      if(!j.ok){L('Generate error: '+(r.error||'?')+'\n'+(r.stderr||''));setStatus('Error.','')}
+      if(!j.ok){L('Generate error: '+(r.error||'?')+'\\n'+(r.stderr||''));setStatus('Error.','')}
       else{
         const name=r.file.name;
         L('Generated: '+name+' ('+r.file.size+' bytes)');
@@ -632,6 +692,16 @@ def _build_static():
         downloadLink.href='/api/files/'+encodeURIComponent(name);
         downloadLink.download=name;
         audiobar.classList.remove('hidden');
+        // Caption SRT download link
+        if(r.captions&&r.captions.path){
+          const srtName=r.captions.name;
+          const capLink=document.createElement('a');
+          capLink.href='/api/files/'+encodeURIComponent(srtName);
+          capLink.download=srtName;
+          capLink.textContent='Download captions (.srt)';
+          capLink.className='btn ghost';
+          L('Captions: '+srtName+' ('+r.captions.size+' bytes) — import to CapCut/subtitle apps');
+        }
         refreshFileList()
       }
     }catch(e){setProgress(false,'');L('Generate exception: '+e);setStatus('Error.','')}
