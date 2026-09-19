@@ -6,9 +6,9 @@
 <title>free-tts</title>
 <style>
   :root{
-    --bg:#1a1a18; --panel:#2a2a28; --line:#444; --txt:#f0f0f0;
+    --bg:#2a2a28; --panel:#333333; --line:#555; --txt:#f0f0f0;
     --muted:#aaa; --accent:#c8553d; --accent2:#ff6b35; --accent3:#8b5a2b; --ok:#4ade80; --bad:#f87171; --fg:var(--txt);
-    --border:#c8553d; --hover:#2a2a28; --shadow:rgba(0,0,0,.5);
+    --border:#c8553d; --hover:#333333; --shadow:rgba(0,0,0,.5);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
@@ -54,7 +54,7 @@
   .hint{font-size:12px;color:var(--muted)}
   .hidden{display:none!important}
   #log{font-size:12px;color:var(--muted);margin-top:10px;max-height:120px;overflow:auto;
-    background:#0b0d10;border:1px solid var(--line);border-radius:8px;padding:6px 8px;white-space:pre-wrap;word-break:break-word}
+    background:var(--hover);border:1px solid var(--line);border-radius:8px;padding:6px 8px;white-space:pre-wrap;word-break:break-word}
   .filelist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
   .fileitem{display:flex;gap:8px;align-items:center;justify-content:space-between;
     background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
