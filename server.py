@@ -649,6 +649,7 @@ def _build_static():
   .cap-entry .cap-time{color:var(--muted);font-size:11px;margin-bottom:2px}
   .cap-entry .cap-text{color:var(--fg)}
   .cap-entry.active{background:var(--accent3);border-left:3px solid var(--accent);padding-left:5px;margin-left:-8px}
+</style>
 </head>
 <body>
 <div class="wrap">
