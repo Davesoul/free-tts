@@ -579,9 +579,9 @@ def _build_static():
 <title>free-tts</title>
 <style>
   :root{
-    --bg:#ffff88; --panel:#fff0b3; --line:#888800; --txt:#000000;
-    --muted:#555500; --accent:#0055ff; --accent2:#cc3300; --accent3:#aa6600; --ok:#00aa00; --bad:#ff4444; --fg:var(--txt);
-    --border:#aaaa00; --hover:#ffffcc; --shadow:rgba(0,0,0,.3);
+    --bg:#1a1a18; --panel:#2a2a28; --line:#444; --txt:#f0f0f0;
+    --muted:#aaa; --accent:#c8553d; --accent2:#ff6b35; --accent3:#8b5a2b; --ok:#4ade80; --bad:#f87171; --fg:var(--txt);
+    --border:#c8553d; --hover:#2a2a28; --shadow:rgba(0,0,0,.5);
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);
@@ -610,7 +610,7 @@ def _build_static():
   input[type=text]:focus,select:focus,textarea:focus{border-color:var(--accent)}
   textarea{resize:vertical;min-height:64px}
   .btn{
-    background:var(--accent);color:#0b1016;border:none;border-radius:8px;
+    background:var(--accent);color:#fff;border:none;border-radius:8px;
     padding:8px 12px;font-weight:600;letter-spacing:.2px;transition:filter .12s,background .12s}
   .btn:hover{filter:brightness(1.08)}
   .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--txt)}
@@ -762,8 +762,8 @@ def _build_static():
   const log=document.getElementById('log');
   function L(m){log.textContent=(log.textContent+'\n'+m).slice(-2500);log.scrollTop=log.scrollHeight;}
   async function api(path,opts){
-    const r=fetch(path,opts);
-    const j=r.then(res=>res.text());
+    const r=await fetch(path,opts);
+    const j=r.text();
     const p=j.then(t=>{try{return JSON.parse(t)}catch(e){return {error:'response not JSON',body:t}}});
     return p.then(x=>{
       if(x.error==='response not JSON'){
