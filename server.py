@@ -674,7 +674,7 @@ def upload():
     f = request.files["file"]
     if not f.filename:
         return jsonify({"error": "No file."}), 400
-    clean = f.form.get("clean") or False  # optional bool from multipart form
+    clean = request.form.get("clean") or False  # optional bool from multipart form
     ts = int(time.time() * 1000)
     ref_path = OUT_DIR / f"ref_{ts}.wav"
     f.save(str(ref_path))
