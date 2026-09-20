@@ -140,24 +140,53 @@ def _fmt_time(sec):
 # ---------------------------------------------------------------------------
 _whisper_model = None
 _whisper_ready = False
+_WHISPER_MODELS = ["Systran/faster-whisper-base", "Systran/faster-whisper-tiny"]
 
 
 def _get_whisper():
-    """Lazy-load and cache the faster-whisper tiny model for forced alignment."""
+    """Lazy-load and cache the best available faster-whisper model for alignment.
+    Tries 'base' first for better word-level accuracy; falls back to 'tiny'."""
     global _whisper_model, _whisper_ready
     if not _whisper_ready:
         try:
             from faster_whisper import WhisperModel
-            _whisper_model = WhisperModel(
-                "Systran/faster-whisper-tiny",
-                device="cpu",
-                compute_type="int8",
-            )
+            for _name in _WHISPER_MODELS:
+                try:
+                    _whisper_model = WhisperModel(
+                        _name, device="cpu", compute_type="int8",
+                    )
+                    print(f"WHISPER-DBG loaded: {_name}", file=sys.stderr)
+                    break
+                except Exception as _e:
+                    print(f"WHISPER-DBG model '{_name}' failed: {_e}", file=sys.stderr)
+                    _whisper_model = None
         except Exception as e:
-            print(f"WHISPER-DBG load failed: {e}", file=sys.stderr)
+            print(f"WHISPER-DBG import failed: {e}", file=sys.stderr)
             _whisper_model = None
         _whisper_ready = True
     return _whisper_model
+
+
+# ---------------------------------------------------------------------------
+# Speaker diarization (pyannote.audio)
+# ---------------------------------------------------------------------------
+_diarizer = None
+_diarizer_ready = False
+
+
+def _get_diarizer():
+    """Lazy-load and cache the pyannote.audio speaker diarization pipeline.
+    Returns None if pyannote.audio is not available or model fails to load."""
+    global _diarizer, _diarizer_ready
+    if not _diarizer_ready:
+        try:
+            from pyannote.audio import Pipeline
+            _diarizer = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+        except Exception as e:
+            print(f"DIARIZER-DBG load failed: {e}", file=sys.stderr)
+            _diarizer = None
+        _diarizer_ready = True
+    return _diarizer
 
 
 def _make_srt_aligned(srt_path, text, audio_path, lang="en"):
@@ -254,6 +283,146 @@ def _make_srt_aligned(srt_path, text, audio_path, lang="en"):
         return True
     except Exception as e:
         print(f"WHISPER-DBG alignment error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return None
+
+
+def _make_srt_diarized(srt_path, text, audio_path, lang="en"):
+    """Generate SRT with word-level timestamps AND speaker diarization.
+
+    Uses faster-whisper for word alignment and pyannote.audio for speaker
+    diarization. Each SRT segment is prefixed with ``[Speaker N]``.
+
+    If *text* is non-empty, words are matched greedily to the original
+    text segments (same algorithm as ``_make_srt_aligned``). If *text* is
+    empty, Whisper transcription segments are used directly as the SRT
+    content.
+    """
+    model = _get_whisper()
+    if model is None:
+        return None
+
+    import re
+
+    def _norm(s):
+        return re.sub(r"[^a-z0-9 ]", "", s.lower()).strip()
+
+    try:
+        wl = lang if lang and lang != "auto" else "en"
+        if wl in ("en-us",):
+            wl = "en"
+
+        segments, _info = model.transcribe(
+            str(audio_path),
+            word_timestamps=True,
+            language=wl,
+        )
+
+        # --- speaker diarization ---
+        diarizer = _get_diarizer()
+        speaker_segments = []
+        if diarizer is not None:
+            try:
+                diarization = diarizer(str(audio_path))
+                for turn, _, speaker in diarization.itertracks(yield_label=True):
+                    speaker_segments.append((turn.start, turn.end, speaker))
+            except Exception as e:
+                print(f"DIARIZER-DBG run failed: {e}", file=sys.stderr)
+
+        if not speaker_segments:
+            print("DIARIZER-DBG no speaker segments, falling back to alignment-only",
+                  file=sys.stderr)
+            return None
+
+        # --- collect words with speaker labels ---
+        def _word_speaker(w_start, w_end):
+            for spk_start, spk_end, spk_label in speaker_segments:
+                if w_start >= spk_start and w_end <= spk_end:
+                    return spk_label
+                if w_start < spk_end and w_end > spk_start:
+                    return spk_label
+            return "?"
+
+        wwords = []
+        for seg in segments:
+            for w in seg.words:
+                nw = _norm(w.word)
+                if nw:
+                    wwords.append((nw, w.word.strip(), w.start, w.end,
+                                   _word_speaker(w.start, w.end)))
+
+        if not wwords:
+            return None
+
+        # --- split text into segments ---
+        text_segs = [s.strip() for s in text.split("\n") if s.strip()]
+        if not text_segs:
+            text_segs = [text.strip()] if text.strip() else None
+
+        if text_segs:
+            # Greedy monotonic word matching (same as _make_srt_aligned but
+            # also tracks speaker labels)
+            seg_word_lists = [
+                [w for w in (_norm(x) for x in seg.split()) if w]
+                for seg in text_segs
+            ]
+
+            wi = 0
+            seg_times = []
+            for seg_wlist in seg_word_lists:
+                if not seg_wlist:
+                    seg_times.append(None)
+                    continue
+                seg_start = seg_end = None
+                seg_speakers = set()
+                for target in seg_wlist:
+                    for j in range(wi, len(wwords)):
+                        if wwords[j][0] == target:
+                            if seg_start is None:
+                                seg_start = wwords[j][2]
+                            seg_end = wwords[j][3]
+                            seg_speakers.add(wwords[j][4])
+                            wi = j + 1
+                            break
+                seg_times.append(
+                    (seg_start, seg_end, seg_speakers)
+                    if (seg_start is not None) else None
+                )
+
+            if any(t is None for t in seg_times):
+                n_bad = sum(1 for t in seg_times if t is None)
+                print(f"WHISPER-DBG: {n_bad}/{len(text_segs)} segments "
+                      f"unaligned, falling back", file=sys.stderr)
+                return None
+
+            # Ensure monotonic, non-overlapping timestamps
+            result = []
+            for i, t in enumerate(seg_times):
+                if result and t[0] < result[-1][1]:
+                    t = (result[-1][1],
+                         max(t[1], result[-1][1] + 0.05), t[2])
+                result.append(t)
+
+            with open(srt_path, "w", encoding="utf-8") as f:
+                for i, seg in enumerate(text_segs):
+                    start, end, speakers = result[i]
+                    spk_str = ", ".join(sorted(speakers)) if speakers else "?"
+                    f.write(f"{i + 1}\n")
+                    f.write(f"{_fmt_time(start)} --> {_fmt_time(end)}\n")
+                    f.write(f"[Speaker {spk_str}] {seg}\n\n")
+        else:
+            # No text provided — use Whisper transcription segments directly
+            with open(srt_path, "w", encoding="utf-8") as f:
+                for i, seg in enumerate(segments, 1):
+                    spk = _word_speaker(seg.start, seg.end)
+                    f.write(f"{i}\n")
+                    f.write(f"{_fmt_time(seg.start)} --> {_fmt_time(seg.end)}\n")
+                    f.write(f"[Speaker {spk}] {seg.text.strip()}\n\n")
+
+        return True
+    except Exception as e:
+        print(f"WHISPER-DBG diarized alignment error: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc(file=sys.stderr)
         return None
@@ -514,6 +683,69 @@ def upload():
         return jsonify({"path": ref_path.name, "size": ref_path.stat().st_size})
 
 
+@app.route("/api/align", methods=["POST"])
+def align():
+    """Generate SRT captions for an existing audio file with optional diarization.
+
+    Request JSON:
+      file     – filename in out/ (e.g. "tts_123.mp3")
+      text     – optional text for alignment (if omitted, Whisper transcription is used)
+      lang     – language code (default "en")
+      diarize  – bool, enable speaker diarization via pyannote.audio
+
+    Response JSON: {ok:true, captions:{path,size,name,fallback?}}
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    file_name = data.get("file")
+    text = (data.get("text") or "").strip()
+    lang = data.get("lang") or "en"
+    diarize = data.get("diarize", False)
+
+    if not file_name:
+        return jsonify({"error": "No file specified."}), 400
+
+    audio_path = OUT_DIR / file_name
+    if not audio_path.exists():
+        return jsonify({"error": "File not found: " + file_name}), 400
+
+    ts = int(time.time() * 1000)
+    srt_name = f"srt_{ts}.srt"
+    srt_path = OUT_DIR / srt_name
+
+    if diarize:
+        result = _make_srt_diarized(srt_path, text, str(audio_path), lang=lang)
+        if result:
+            print("ALIGN-DBG SRT: diarized", file=sys.stderr)
+        else:
+            result = _make_srt_aligned(srt_path, text or "", str(audio_path), lang=lang)
+            if result:
+                print("ALIGN-DBG SRT: alignment-only (diarization unavailable)",
+                      file=sys.stderr)
+    else:
+        result = _make_srt_aligned(srt_path, text or "", str(audio_path), lang=lang)
+        if result:
+            print("ALIGN-DBG SRT: word-level aligned", file=sys.stderr)
+
+    if result and srt_path.exists():
+        return jsonify({"ok": True, "captions": {
+            "path": str(srt_path), "size": srt_path.stat().st_size, "name": srt_name}})
+    else:
+        # Fallback to text-weighted division
+        try:
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", str(audio_path)],
+                capture_output=True, text=True, check=True,
+            )
+            duration = float(probe.stdout.strip())
+        except Exception:
+            duration = audio_path.stat().st_size / 20000
+        _make_srt(srt_path, text or "", duration)
+        return jsonify({"ok": True, "captions": {
+            "path": str(srt_path), "size": srt_path.stat().st_size,
+            "name": srt_name, "fallback": True}})
+
+
 @app.route("/api/files")
 def list_files():
     try:
@@ -522,6 +754,8 @@ def list_files():
             files.append({"name": p.name, "size": p.stat().st_size, "type": "mp3"})
         for p in sorted(OUT_DIR.glob("*.wav"), reverse=True):
             files.append({"name": p.name, "size": p.stat().st_size, "type": "wav"})
+        for p in sorted(OUT_DIR.glob("*.srt"), reverse=True):
+            files.append({"name": p.name, "size": p.stat().st_size, "type": "srt"})
         return jsonify({"files": files})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -539,6 +773,8 @@ def files(name):
         return send_file(str(p), mimetype="audio/mpeg", as_attachment=False, download_name=name)
     if name.endswith(".wav"):
         return send_file(str(p), mimetype="audio/wav", as_attachment=False, download_name=name)
+    if name.endswith(".srt"):
+        return send_file(str(p), mimetype="application/x-subrip", as_attachment=False, download_name=name)
     return send_file(str(p), as_attachment=False, download_name=name)
 
 
@@ -735,6 +971,30 @@ def _build_static():
     <span class="status" id="status"></span>
   </div>
 
+  <div class="panel" style="margin-top:14px">
+    <div class="row" style="margin-bottom:8px">
+      <div style="font-size:13px;color:var(--muted)">Generate captions (SRT) for an existing audio file</div>
+    </div>
+    <div class="row stacked">
+      <div>
+        <label for="alignFile">Audio file</label>
+        <select id="alignFile"><option value="">Pick a file…</option></select>
+      </div>
+    </div>
+    <div class="row stacked" style="margin-top:8px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Optional text for word alignment</div>
+      <textarea id="alignText" placeholder="Leave empty to auto-transcribe…"></textarea>
+    </div>
+    <div class="row" style="margin-top:8px;gap:8px;align-items:center">
+      <input type="checkbox" id="alignDiarize" style="accent-color:var(--accent)" />
+      <label for="alignDiarize" style="font-size:12px;color:var(--muted);margin:0">Diarize (speaker labels)</label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="alignBtn">Generate SRT</button>
+      <span class="status" id="alignStatus"></span>
+    </div>
+  </div>
+
   <div class="audiobar hidden" id="audiobar">
     <audio id="player" controls></audio>
     <div class="actions">
@@ -792,6 +1052,8 @@ def _build_static():
     audiobar=$('#audiobar'),player=$('#player'),downloadLink=$('#downloadLink'),
     playBtn=$('#playBtn'),stopBtn=$('#stopBtn'),clearBtn=$('#clearBtn'),
     filelist=$('#filelist'),refreshFilesBtn=$('#refreshFilesBtn');
+  const alignFile=$('#alignFile'),alignDiarize=$('#alignDiarize'),
+    alignBtn=$('#alignBtn'),alignStatus=$('#alignStatus'),alignText=$('#alignText');
 
   let mediaRecorder=null, recordedChunks=[], recordedBlob=null;
 
@@ -925,6 +1187,33 @@ def _build_static():
     setRunning(false)
   });
 
+  // ---- align existing file ----
+  alignBtn.addEventListener('click',async ()=>{
+    const fn=alignFile.value;
+    if(!fn){alignStatus.textContent='Pick a file.';return}
+    const txt=alignText.value.trim();
+    const d=alignDiarize.checked;
+    alignStatus.textContent='Aligning…';
+    try{
+      const j=await api('/api/align',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({file:fn,text:txt,diarize:d})});
+      if(j.captions){
+        L('Aligned SRT: '+j.captions.name+' ('+j.captions.size+' bytes)');
+        setStatus('SRT: '+j.captions.name,'ok');
+        alignStatus.textContent='Done';
+        if(j.captions.fallback)L('Note: text-weighted fallback used')
+      }else{
+        L('Align error: '+(j.error||'?'));
+        alignStatus.textContent='Failed'
+      }
+    }catch(e){
+      L('Align exception: '+e);
+      alignStatus.textContent='Failed'
+    }
+    refreshFileList()
+  });
+
   playBtn.addEventListener('click',()=>player.play().catch(e=>L('Play error: '+e)));
   stopBtn.addEventListener('click',()=>{player.pause();player.currentTime=0});
   clearBtn.addEventListener('click',()=>{player.pause();player.src='';audiobar.classList.add('hidden');setStatus('')});
@@ -992,7 +1281,12 @@ def _build_static():
     try{
       const res=await fetch('/api/files');const j=await res.json();
       filelist.innerHTML='';
+      alignFile.innerHTML='<option value="">Pick a file…</option>';
       if(!j.files||!j.files.length){filelist.innerHTML='<div class="hint">No files yet.</div>';return}
+      j.files.filter(f=>f.type==='mp3'||f.type==='wav').forEach(f=>{
+        const o=document.createElement('option');o.value=f.name;
+        o.textContent=f.name+' ('+(f.size/1024).toFixed(0)+'KB)';alignFile.appendChild(o)
+      });
       j.files.slice(0,60).forEach(f=>{
         const div=document.createElement('div');div.className='fileitem';
         const a=document.createElement('a');a.href='/api/files/'+encodeURIComponent(f.name);

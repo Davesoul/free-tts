@@ -162,6 +162,30 @@
     <span class="status" id="status"></span>
   </div>
 
+  <div class="panel" style="margin-top:14px">
+    <div class="row" style="margin-bottom:8px">
+      <div style="font-size:13px;color:var(--muted)">Generate captions (SRT) for an existing audio file</div>
+    </div>
+    <div class="row stacked">
+      <div>
+        <label for="alignFile">Audio file</label>
+        <select id="alignFile"><option value="">Pick a file…</option></select>
+      </div>
+    </div>
+    <div class="row stacked" style="margin-top:8px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Optional text for word alignment</div>
+      <textarea id="alignText" placeholder="Leave empty to auto-transcribe…"></textarea>
+    </div>
+    <div class="row" style="margin-top:8px;gap:8px;align-items:center">
+      <input type="checkbox" id="alignDiarize" style="accent-color:var(--accent)" />
+      <label for="alignDiarize" style="font-size:12px;color:var(--muted);margin:0">Diarize (speaker labels)</label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="alignBtn">Generate SRT</button>
+      <span class="status" id="alignStatus"></span>
+    </div>
+  </div>
+
   <div class="audiobar hidden" id="audiobar">
     <audio id="player" controls></audio>
     <div class="actions">
@@ -219,6 +243,8 @@
     audiobar=$('#audiobar'),player=$('#player'),downloadLink=$('#downloadLink'),
     playBtn=$('#playBtn'),stopBtn=$('#stopBtn'),clearBtn=$('#clearBtn'),
     filelist=$('#filelist'),refreshFilesBtn=$('#refreshFilesBtn');
+  const alignFile=$('#alignFile'),alignDiarize=$('#alignDiarize'),
+    alignBtn=$('#alignBtn'),alignStatus=$('#alignStatus'),alignText=$('#alignText');
 
   let mediaRecorder=null, recordedChunks=[], recordedBlob=null;
 
@@ -352,6 +378,33 @@
     setRunning(false)
   });
 
+  // ---- align existing file ----
+  alignBtn.addEventListener('click',async ()=>{
+    const fn=alignFile.value;
+    if(!fn){alignStatus.textContent='Pick a file.';return}
+    const txt=alignText.value.trim();
+    const d=alignDiarize.checked;
+    alignStatus.textContent='Aligning…';
+    try{
+      const j=await api('/api/align',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({file:fn,text:txt,diarize:d})});
+      if(j.captions){
+        L('Aligned SRT: '+j.captions.name+' ('+j.captions.size+' bytes)');
+        setStatus('SRT: '+j.captions.name,'ok');
+        alignStatus.textContent='Done';
+        if(j.captions.fallback)L('Note: text-weighted fallback used')
+      }else{
+        L('Align error: '+(j.error||'?'));
+        alignStatus.textContent='Failed'
+      }
+    }catch(e){
+      L('Align exception: '+e);
+      alignStatus.textContent='Failed'
+    }
+    refreshFileList()
+  });
+
   playBtn.addEventListener('click',()=>player.play().catch(e=>L('Play error: '+e)));
   stopBtn.addEventListener('click',()=>{player.pause();player.currentTime=0});
   clearBtn.addEventListener('click',()=>{player.pause();player.src='';audiobar.classList.add('hidden');setStatus('')});
@@ -419,7 +472,12 @@
     try{
       const res=await fetch('/api/files');const j=await res.json();
       filelist.innerHTML='';
+      alignFile.innerHTML='<option value="">Pick a file…</option>';
       if(!j.files||!j.files.length){filelist.innerHTML='<div class="hint">No files yet.</div>';return}
+      j.files.filter(f=>f.type==='mp3'||f.type==='wav').forEach(f=>{
+        const o=document.createElement('option');o.value=f.name;
+        o.textContent=f.name+' ('+(f.size/1024).toFixed(0)+'KB)';alignFile.appendChild(o)
+      });
       j.files.slice(0,60).forEach(f=>{
         const div=document.createElement('div');div.className='fileitem';
         const a=document.createElement('a');a.href='/api/files/'+encodeURIComponent(f.name);
