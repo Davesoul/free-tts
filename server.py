@@ -176,12 +176,21 @@ _diarizer_ready = False
 
 def _get_diarizer():
     """Lazy-load and cache the pyannote.audio speaker diarization pipeline.
-    Returns None if pyannote.audio is not available or model fails to load."""
+
+    Requires HF_TOKEN env var for gated models (visit
+    hf.co/pyannote/speaker-diarization-3.1 to accept terms).
+    Returns None if pyannote.audio is not available or model fails to load.
+    """
     global _diarizer, _diarizer_ready
     if not _diarizer_ready:
+        token = os.environ.get("HF_TOKEN")
         try:
             from pyannote.audio import Pipeline
-            _diarizer = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+            _diarizer = Pipeline.from_pretrained(
+                "pyannote/speaker-diarization-3.1",
+                token=token,
+            )
+            print("DIARIZER-DBG loaded: pyannote/speaker-diarization-3.1", file=sys.stderr)
         except Exception as e:
             print(f"DIARIZER-DBG load failed: {e}", file=sys.stderr)
             _diarizer = None

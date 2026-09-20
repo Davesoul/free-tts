@@ -215,7 +215,7 @@ Generate SRT captions for an existing audio file in `out/`, with optional speake
 - `file` — filename of an audio file in `out/` (e.g. an MP3 generated earlier).
 - `text` — if provided, words are matched greedily to the Whisper transcription for accurate per-segment timing. If omitted, Whisper transcription segments are used directly.
 - `lang` — language code for Whisper transcription.
-- `diarize` — if `true`, runs pyannote.audio speaker diarization. Each SRT segment is prefixed with `[Speaker N]`. Falls back to alignment-only if diarization fails.
+- `diarize` — if `true`, runs pyannote.audio speaker diarization. Each SRT segment is prefixed with `[Speaker N]`. Set `HF_TOKEN` env var (accept terms at `hf.co/pyannote/speaker-diarization-3.1` first). Falls back to alignment-only if diarization fails.
 
 **Response (success):**
 ```json
@@ -238,7 +238,7 @@ Generate SRT captions for an existing audio file in `out/`, with optional speake
 
 **Notes:**
 - Uses faster-whisper for word-level forced alignment. Model `Systran/faster-whisper-base` is tried first, falling back to `tiny`.
-- Speaker diarization uses `pyannote/speaker-diarization-3.1` via pyannote.audio.
+- Speaker diarization uses `pyannote/speaker-diarization-3.1` via pyannote.audio. Set `HF_TOKEN` env var (accept terms at `hf.co/pyannote/speaker-diarization-3.1` first). Falls back to alignment-only if unavailable.
 
 ---
 

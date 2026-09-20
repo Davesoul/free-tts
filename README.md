@@ -53,7 +53,7 @@ Each MP3 is generated alongside an SRT caption file with **word-level timestamps
 
 - If `faster-whisper` is not installed or alignment fails, the server falls back to character-count-weighted timestamp division.
 - The alignment model is cached on first use (~tens of MB).
-- **Align existing files**: select any MP3/WAV from the file list and click "Generate SRT" in the alignment panel below the Generate button — optionally paste text for better word matching or leave empty to auto-transcribe. Enable "Diarize" for speaker labels via pyannote.audio.
+- **Align existing files**: select any MP3/WAV from the file list and click "Generate SRT" in the alignment panel below the Generate button — optionally paste text for better word matching or leave empty to auto-transcribe. Enable "Diarize" for speaker labels via pyannote.audio (requires `HF_TOKEN` env var; falls back to alignment-only if unavailable).
 - The UI supports **light and dark mode** (navy blue palette), auto-detected via the OS `prefers-color-scheme` media query.
 
 ## Requirements
