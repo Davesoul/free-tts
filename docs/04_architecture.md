@@ -324,12 +324,15 @@ The `clean` checkbox state is sent as `clean: $('#cleanRef').checked` (a boolean
 After synthesis, the server generates an SRT caption file with word-level timestamps aligned to actual speech:
 
 ```
-audio (MP3) → faster-whisper-tiny (word_timestamps=True) →
-  greedy word matching to text segments → SRT
+audio (MP3) → faster-whisper (word_timestamps=True) →
+  greedy word matching to text segments → SRT (optionally with speaker diarization)
 ```
 
-- `_get_whisper()` caches a `WhisperModel('Systran/faster-whisper-tiny', device='cpu', compute_type='int8')` singleton.
+- `_get_whisper()` tries `faster-whisper-base` first for better word-level accuracy, falls back to `faster-whisper-tiny` if the base model is not cached. Both run on CPU with int8 quantization.
 - `_make_srt_aligned()` transcribes the MP3, collects word timestamps, normalizes words (lowercase, strip non-alphanumeric), and greedily matches them to text segments (split by newlines). Segment start = first matched word's start, segment end = last matched word's end. Timestamps are forced to be non-decreasing.
+- `_make_srt_diarized()` extends the alignment with speaker diarization via pyannote.audio (`pyannote/speaker-diarization-3.1`). Each SRT segment is prefixed with `[Speaker N]`. Falls back to alignment-only if diarization fails.
+- `/api/align` endpoint: generates SRT for any existing MP3/WAV in `out/` with optional diarization — no TTS generation required. Accepts `file`, `text` (optional), `lang`, and `diarize` fields.
+- File list (`GET /api/files`) includes `.srt` files. `.srt` files are served with `application/x-subrip` MIME type.
 - Fallback: if alignment fails (any segment unaligned, or faster-whisper not installed), `_make_srt()` (character-count-weighted division) is used.
 - `_fmt_time()` formats seconds to `HH:MM:SS,mmm` SRT format.
 

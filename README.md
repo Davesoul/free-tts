@@ -49,10 +49,11 @@ Kokoro ships several voices. Run `python tts.py --list-voices` to see the full s
 
 ## Captions & Timeline
 
-Each MP3 is generated alongside an SRT caption file with **word-level timestamps** aligned to the actual speech using `faster-whisper` (Whisper-tiny, CPU, int8 quantized). The timeline in the UI syncs to audio playback, highlighting the current caption and auto-scrolling.
+Each MP3 is generated alongside an SRT caption file with **word-level timestamps** aligned to the actual speech using `faster-whisper` (Whisper-base preferred, CPU, int8 quantized; falls back to tiny). The timeline in the UI syncs to audio playback, highlighting the current caption and auto-scrolling.
 
 - If `faster-whisper` is not installed or alignment fails, the server falls back to character-count-weighted timestamp division.
-- The alignment model (`Systran/faster-whisper-tiny`) is cached on first use.
+- The alignment model is cached on first use (~tens of MB).
+- **Align existing files**: select any MP3/WAV from the file list and click "Generate SRT" in the alignment panel below the Generate button — optionally paste text for better word matching or leave empty to auto-transcribe. Enable "Diarize" for speaker labels via pyannote.audio.
 - The UI supports **light and dark mode** (navy blue palette), auto-detected via the OS `prefers-color-scheme` media query.
 
 ## Requirements

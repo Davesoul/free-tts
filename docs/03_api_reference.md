@@ -193,8 +193,52 @@ Upload a reference audio file.
 **Status:** 200 on success, 400 on bad request.
 
 **Notes:**
-- Same normalization and cleaning behavior as `/api/record`.
-- The `path` returned is the basename only.
+|- Same normalization and cleaning behavior as `/api/record`.
+|- The `path` returned is the basename only.
+
+---
+
+### POST /api/align
+
+Generate SRT captions for an existing audio file in `out/`, with optional speaker diarization. No TTS generation required — select an existing MP3/WAV and get word-level aligned captions.
+
+**Request body (JSON):**
+```json
+{
+  "file": "tts_1234567890.mp3",   // required: filename in out/
+  "text": "Optional text...",      // optional: paste text for better word alignment
+  "lang": "en",                    // optional: language code (default: en)
+  "diarize": false                 // optional: enable speaker diarization (default: false)
+}
+```
+
+- `file` — filename of an audio file in `out/` (e.g. an MP3 generated earlier).
+- `text` — if provided, words are matched greedily to the Whisper transcription for accurate per-segment timing. If omitted, Whisper transcription segments are used directly.
+- `lang` — language code for Whisper transcription.
+- `diarize` — if `true`, runs pyannote.audio speaker diarization. Each SRT segment is prefixed with `[Speaker N]`. Falls back to alignment-only if diarization fails.
+
+**Response (success):**
+```json
+{
+  "ok": true,
+  "captions": {
+    "name": "srt_1234567890.srt",
+    "path": "...",
+    "size": 533,
+    "fallback": false
+  }
+}
+```
+
+- `captions.name` — the generated SRT filename.
+- `captions.size` — the SRT file size in bytes.
+- `captions.fallback` — present and `true` if Whisper alignment failed and text-weighted division was used.
+
+**Status:** 200 on success, 400 on bad request.
+
+**Notes:**
+- Uses faster-whisper for word-level forced alignment. Model `Systran/faster-whisper-base` is tried first, falling back to `tiny`.
+- Speaker diarization uses `pyannote/speaker-diarization-3.1` via pyannote.audio.
 
 ---
 
@@ -209,7 +253,8 @@ List files in the `out/` directory.
 {
   "files": [
     {"name": "tts_1234567890.mp3", "size": 12345, "type": "mp3"},
-    {"name": "ref_1234567890_norm.wav", "size": 6789, "type": "wav"}
+    {"name": "ref_1234567890_norm.wav", "size": 6789, "type": "wav"},
+    {"name": "srt_1234567890.srt", "size": 533, "type": "srt"}
   ]
 }
 ```
@@ -228,9 +273,10 @@ Download a file from `out/`.
 **Request:** none (the file is identified by the URL path).
 
 **Response:** the file bytes with appropriate Content-Type:
-- `audio/mpeg` for .mp3
-- `audio/wav` for .wav
-- `application/octet-stream` for other files
+|- `audio/mpeg` for .mp3
+|- `audio/wav` for .wav
+|- `application/x-subrip` for .srt
+|- `application/octet-stream` for other files
 
 **Status:** 200 on success, 400 on bad name, 404 if not found.
 
