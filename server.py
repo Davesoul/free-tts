@@ -231,7 +231,19 @@ def _make_srt_aligned(srt_path, text, audio_path, lang="en"):
         # Split original text into segments (by newlines)
         text_segs = [s.strip() for s in text.split("\n") if s.strip()]
         if not text_segs:
-            text_segs = [text.strip()]
+            if text.strip():
+                text_segs = [text.strip()]
+            else:
+                text_segs = None
+
+        if text_segs is None:
+            # No text provided — use Whisper segmentation directly
+            with open(srt_path, "w", encoding="utf-8") as f:
+                for i, seg in enumerate(segments, 1):
+                    f.write(f"{i}\n")
+                    f.write(f"{_fmt_time(seg.start)} --> {_fmt_time(seg.end)}\n")
+                    f.write(f"{seg.text.strip()}\n\n")
+            return True
 
         # Normalized word list per text segment
         seg_word_lists = [
