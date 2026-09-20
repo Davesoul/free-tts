@@ -217,6 +217,7 @@ def _make_srt_aligned(srt_path, text, audio_path, lang="en"):
             word_timestamps=True,
             language=wl,
         )
+        segments = list(segments)  # materialize generator for multiple iterations
 
         # Collect whisper words: (normalized_word, start, end)
         wwords = []
@@ -330,6 +331,7 @@ def _make_srt_diarized(srt_path, text, audio_path, lang="en"):
             word_timestamps=True,
             language=wl,
         )
+        segments = list(segments)  # materialize generator for multiple iterations
 
         # --- speaker diarization ---
         diarizer = _get_diarizer()
